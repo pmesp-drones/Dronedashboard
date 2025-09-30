@@ -4,18 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Operacional - Drones PM (Integrado + Configurar Equipes)</title>
+  <title>Dashboard Operacional - Drones PM</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    :root { --card:#111827; --card2:#1f2937; }
     body { box-sizing: border-box; }
-    .video-container { transition: all 0.2s ease; }
-    .video-container:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
     .grid-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
     @media (max-width: 1400px){ .grid-container { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 1024px){ .grid-container { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 640px) { .grid-container { grid-template-columns: 1fr; } }
-    .aspect-video { position: relative; padding-top: 56.25%; }
-    .abs-fill { position: absolute; inset: 0; }
+
+    .video-card { background: var(--card); border: 1px solid #374151; border-radius: 12px; overflow: hidden; }
+    .video-box { aspect-ratio: 16/9; position: relative; background:#0b1220; }
+    .player-fill { position:absolute; inset:0; }
     .badge-live { background: #dc2626; }
     .tile-btn { font-size: 12px; padding: 4px 8px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; }
     .tile-btn:hover { background: rgba(255,255,255,.08); }
@@ -24,11 +25,14 @@
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
+  <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-40">
     <div class="flex flex-col gap-2 lg:flex-row lg:justify-between lg:items-center max-w-7xl mx-auto">
       <div class="flex items-center gap-4">
         <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z"/></svg>
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z"/>
+          </svg>
         </div>
         <div>
           <h1 class="text-xl font-bold">Dashboard Operacional - Drones PM</h1>
@@ -37,16 +41,13 @@
         <span id="cfgNotice" class="notice hidden">Config remota ativa</span>
       </div>
       <div class="flex items-center gap-3">
-        <div class="hidden sm:flex items-center gap-2">
-          <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-          <span class="text-sm">Sistema Ativo</span>
-        </div>
         <button id="btnFullscreen" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Tela Cheia</button>
         <button id="btnShare" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Gerar Link</button>
-        <button id="btnConfig" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Configurar Equipes</button>
+        <button id="btnConfig" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Inserir Equipe</button>
       </div>
     </div>
 
+    <!-- Controls -->
     <div class="mt-3 max-w-7xl mx-auto">
       <div class="flex flex-wrap items-center gap-2">
         <label class="text-xs text-gray-400">Layout</label>
@@ -57,52 +58,55 @@
           <option value="2">2 colunas</option>
         </select>
 
-        <input id="labels" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Rótulos (vírgula) ex: Drone 01, Drone 02, ..." />
+        <input id="labels" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Rótulos (vírgula) ex: Equipe 01, Equipe 02, ..." />
         <input id="ids" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="IDs do YouTube (vírgula)" />
 
         <button id="apply" class="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm">Aplicar</button>
         <button id="clear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Limpar</button>
-        <button id="reload" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Recarregar config</button>
       </div>
       <p class="text-[11px] text-gray-400 mt-1">
-        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Use <code>?cfg=config.json&refresh=10</code> para sincronizar com a equipe.
+        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Para sincronizar com a equipe use <b>config remota</b> com <code>?cfg=config.json&refresh=10</code>.
       </p>
     </div>
   </header>
 
+  <!-- Grid View -->
   <main class="p-4 max-w-7xl mx-auto">
     <div id="gridContainer" class="grid-container"></div>
   </main>
 
-  <!-- Modal: Configurar Equipes -->
+  <!-- Modal: Inserir Equipe -->
   <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h3 class="text-lg font-semibold mb-4">Configurar Equipe</h3>
+        <h3 class="text-lg font-semibold mb-4">Inserir Equipe</h3>
         <form id="teamForm">
           <div class="mb-3">
             <label class="block text-sm mb-1">Nome da Equipe</label>
-            <input id="teamName" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+            <input id="teamName" type="text" required
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
           </div>
           <div class="mb-3">
-            <label class="block text-sm mb-1">Endereço da Operação (opcional)</label>
-            <input id="teamLocation" type="text" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+            <label class="block text-sm mb-1">Endereço da Operação</label>
+            <input id="teamLocation" type="text" placeholder="Rua / Bairro / Ponto de referência"
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
           </div>
           <div class="mb-4">
             <label class="block text-sm mb-1">URL do YouTube</label>
-            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
+            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..."
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
           </div>
+
           <div class="flex gap-3">
             <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>
-            <button id="btnExport" type="button" class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-2 rounded">Exportar config.json</button>
             <button id="btnCancel" type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded">Cancelar</button>
           </div>
-          <p class="text-[11px] text-gray-400 mt-3">“Adicionar” atualiza a página e o link compartilhável. Para sincronizar com todos via <code>config.json</code>, clique em <b>Exportar</b> e cole no arquivo do GitHub.</p>
         </form>
       </div>
     </div>
   </div>
 
+  <!-- Scripts -->
   <script>
     // Fullscreen
     document.getElementById('btnFullscreen').addEventListener('click', () => {
@@ -114,18 +118,18 @@
     const qs=(s,e=document)=>e.querySelector(s); const qsa=(s,e=document)=>Array.from(e.querySelectorAll(s));
     const params=new URLSearchParams(location.search);
     const cfgUrl=params.get('cfg'); const refreshSec=parseInt(params.get('refresh')||'0',10);
-    let VIDEO_IDS=[]; let LABELS=[]; let COLS=parseInt(params.get('cols')||'4',10);
-    let players=[]; let YT_READY=false; let lastConfigJSON=null; let fsPlayer=null;
+    let VIDEO_IDS=[]; let LABELS=[]; let LOCS=[]; let COLS=parseInt(params.get('cols')||'4',10);
+    let players=[]; let YT_READY=false; let lastConfigJSON=null;
 
     function getParamArray(name){ const raw=params.get(name); if(!raw) return []; return raw.split(',').map(s=>decodeURIComponent(s.trim())).filter(Boolean); }
     function setParamArray(name,arr){ if(!arr||arr.length===0){ params.delete(name); return;} params.set(name, arr.map(encodeURIComponent).join(',')); }
     function updateURL(){ const url=location.pathname+'?'+params.toString(); history.replaceState({},'',url); }
     function copyShareURL(){ const base=location.origin+location.pathname; const url=base+'?'+params.toString(); navigator.clipboard.writeText(url).then(()=>alert('Link copiado.\\n\\n'+url)); }
-    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39'}[s])); }
+    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
     function youtubeIdFromUrl(url){ try{ if(url.includes('watch?v=')) return url.split('v=')[1].split('&')[0]; if(url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0]; }catch(_){ } return url.trim(); }
 
     // Inputs init
-    VIDEO_IDS=getParamArray('ids'); LABELS=getParamArray('labels');
+    VIDEO_IDS=getParamArray('ids'); LABELS=getParamArray('labels'); LOCS=getParamArray('locs');
     qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); qs('#layout').value=String(COLS);
     if(cfgUrl) document.getElementById('cfgNotice').classList.remove('hidden');
 
@@ -136,15 +140,12 @@
         const res=await fetch(cfgUrl+(cfgUrl.includes('?')?'&':'?')+'_='+(Date.now()));
         if(!res.ok) throw new Error('HTTP '+res.status);
         const json=await res.json();
-        if(!json || !Array.isArray(json.ids)) throw new Error('Formato inválido');
-        lastConfigJSON=JSON.stringify(json);
-        VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; COLS=Number(json.cols||4);
+        VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; LOCS=json.locs||LOCS; COLS=Number(json.cols||4);
         qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); qs('#layout').value=String(COLS);
-        params.set('cols', String(COLS)); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); updateURL();
+        params.set('cols', String(COLS)); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); if(LOCS.length) setParamArray('locs', LOCS); updateURL();
         renderGrid(); if(alertOk) alert('Config remota recarregada.');
       }catch(e){ if(alertOk) alert('Falha ao carregar config: '+e.message); }
     }
-
     if(cfgUrl){
       loadRemoteConfig(false);
       if(refreshSec>0){
@@ -153,12 +154,15 @@
             const res=await fetch(cfgUrl+(cfgUrl.includes('?')?'&':'?')+'_='+(Date.now()));
             if(!res.ok) return;
             const txt=await res.text();
-            if(txt && txt!==lastConfigJSON){
-              const json=JSON.parse(txt); lastConfigJSON=txt;
-              VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; COLS=Number(json.cols||4);
-              qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); qs('#layout').value=String(COLS);
-              params.set('cols', String(COLS)); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); updateURL();
-              renderGrid();
+            if(txt){
+              const json=JSON.parse(txt);
+              const changed = JSON.stringify({ids:VIDEO_IDS,labels:LABELS,locs:LOCS,cols:COLS}) !== JSON.stringify({ids:json.ids||[],labels:json.labels||[],locs:json.locs||[],cols:Number(json.cols||4)});
+              if(changed){
+                VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; LOCS=json.locs||[]; COLS=Number(json.cols||4);
+                qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); qs('#layout').value=String(COLS);
+                params.set('cols', String(COLS)); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); if(LOCS.length) setParamArray('locs', LOCS); updateURL();
+                renderGrid();
+              }
             }
           }catch(_){}
         }, Math.max(5000, refreshSec*1000));
@@ -175,23 +179,25 @@
       grid.style.gridTemplateColumns=`repeat(${parseInt(qs('#layout').value,10)}, 1fr)`;
       grid.innerHTML='';
 
-      if(LABELS.length<VIDEO_IDS.length){ for(let i=LABELS.length;i<VIDEO_IDS.length;i++) LABELS[i]=`Drone ${String(i+1).padStart(2,'0')}`; }
+      if(LABELS.length<VIDEO_IDS.length){ for(let i=LABELS.length;i<VIDEO_IDS.length;i++) LABELS[i]=`Equipe ${String(i+1).padStart(2,'0')}`; }
+      if(LOCS.length<VIDEO_IDS.length){ for(let i=LOCS.length;i<VIDEO_IDS.length;i++) LOCS[i]=''; }
       players=[];
 
       if(!VIDEO_IDS.length){
         const div=document.createElement('div'); div.className='bg-gray-800 rounded-lg p-4 text-sm text-gray-300';
-        div.innerHTML='Insira <b>IDs</b> acima e clique <b>Aplicar</b> — ou use <code>?cfg=config.json&refresh=10</code>.';
+        div.innerHTML='Clique em <b>Inserir Equipe</b> ou preencha os campos acima e clique <b>Aplicar</b>. Para sincronizar use <code>?cfg=config.json&refresh=10</code>.';
         grid.appendChild(div); return;
       }
 
       VIDEO_IDS.forEach((id, index)=>{
-        const label=LABELS[index]||`Drone ${String(index+1).padStart(2,'0')}`;
-        const card=document.createElement('div'); card.className='video-container bg-gray-800 rounded-lg overflow-hidden';
+        const name=LABELS[index]||`Equipe ${String(index+1).padStart(2,'0')}`;
+        const loc=LOCS[index]||'';
+        const card=document.createElement('div'); card.className='video-card';
+
         card.innerHTML=`
-          <div class="relative">
-            <div class="aspect-video"><div id="yt_${index}" class="abs-fill"></div></div>
+          <div class="relative video-box">
+            <div id="yt_${index}" class="player-fill"></div>
             <div class="absolute top-2 left-2 flex items-center gap-2">
-              <span class="px-2 py-1 rounded text-xs bg-black/60 border border-white/10">${escapeHtml(label)}</span>
               <span class="px-2 py-1 rounded text-[10px] badge-live flex items-center gap-1">
                 <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span> AO VIVO
               </span>
@@ -201,9 +207,10 @@
               <button class="tile-btn" data-action="focus" data-idx="${index}">Tela cheia</button>
             </div>
           </div>
-          <div class="p-3 flex items-center justify-between">
+          <div class="p-3 flex items-center justify-between bg-gray-800/70">
             <div class="text-sm">
-              <h3 class="font-semibold">${escapeHtml(label)}</h3>
+              <h3 class="font-semibold">${escapeHtml(name)}</h3>
+              <p class="text-gray-300 text-xs">${escapeHtml(loc)}</p>
               <a class="text-blue-300 text-xs hover:underline" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank">Abrir no YouTube ↗</a>
             </div>
             <span class="muted-pill">🔇 Mutado (autoplay)</span>
@@ -213,11 +220,13 @@
         if(YT_READY){
           const ply=new YT.Player(`yt_${index}`, {
             videoId: id,
+            width: '100%',
+            height: '100%',
             playerVars:{ autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1, enablejsapi:1 },
             events:{ onReady:e=>{ try{ e.target.mute(); e.target.playVideo(); }catch(_){} },
                      onStateChange:e=>{ if(e.data===0){ setTimeout(()=>{ try{ e.target.playVideo(); }catch(_){ } }, 5000); } } }
           });
-          players.push({ index, id, label, player: ply });
+          players.push({ index, id, name, loc, player: ply });
         } else {
           const cont=qs(`#yt_${index}`); if(cont) cont.innerHTML='<div class="w-full h-full bg-gray-700"></div>';
         }
@@ -232,39 +241,29 @@
       if(action==='sound'){
         players.forEach(p=>{ try{ if(p.index===idx){ p.player.unMute(); p.player.setVolume(100); } else { p.player.mute(); } }catch(_){ } });
       } else if(action==='focus'){
-        openFeatured(idx);
+        window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(entry.id)}`,'_blank');
       }
     });
-
-    let fsPlayerRef=null;
-    function openFeatured(idx){
-      const entry=players.find(p=>p.index===idx); if(!entry) return;
-      // Cria um modal simples de destaque usando fullscreen nativo do navegador (ou implemente overlay aqui)
-      if(!document.fullscreenElement){
-        document.documentElement.requestFullscreen();
-      }
-      // Abre player flutuante com som
-      if(fsPlayerRef){ try{ fsPlayerRef.destroy(); }catch(_){ } fsPlayerRef=null; }
-      const w=window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(entry.id)}`,'_blank');
-      // Alternativa minimalista: poderia montar um overlay com player incorporado, conforme a versão anterior.
-    }
 
     // Inputs / share
     qs('#apply').addEventListener('click', ()=>{
       VIDEO_IDS=qs('#ids').value.split(',').map(s=>s.trim()).filter(Boolean);
       LABELS=qs('#labels').value.split(',').map(s=>s.trim());
       params.set('cols', qs('#layout').value); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS);
+      if(LOCS.length) setParamArray('locs', LOCS);
       updateURL(); renderGrid();
     });
     qs('#clear').addEventListener('click', ()=>{
-      VIDEO_IDS=[]; LABELS=[]; qs('#ids').value=''; qs('#labels').value=''; ['ids','labels','cols'].forEach(k=>params.delete(k));
+      VIDEO_IDS=[]; LABELS=[]; LOCS=[];
+      qs('#ids').value=''; qs('#labels').value=''; ['ids','labels','cols','locs'].forEach(k=>params.delete(k));
       updateURL(); renderGrid();
     });
     qs('#layout').addEventListener('change', ()=>{ params.set('cols', qs('#layout').value); updateURL(); renderGrid(); });
-    qs('#reload').addEventListener('click', ()=> loadRemoteConfig(true));
     qs('#btnShare').addEventListener('click', ()=>{
       params.set('cols', qs('#layout').value); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS);
-      if(cfgUrl) params.set('cfg', cfgUrl); copyShareURL();
+      if(LOCS.length) setParamArray('locs', LOCS);
+      if(cfgUrl) params.set('cfg', cfgUrl);
+      copyShareURL();
     });
 
     // Modal handlers
@@ -280,25 +279,14 @@
       const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
       if(!name || !youtubeUrl){ alert('Preencha Nome da Equipe e URL do YouTube.'); return; }
       const id = youtubeIdFromUrl(youtubeUrl);
-      VIDEO_IDS.push(id);
-      LABELS.push(name);
+
+      VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(location);
       qs('#ids').value = VIDEO_IDS.join(', ');
       qs('#labels').value = LABELS.join(', ');
       params.set('cols', qs('#layout').value);
-      setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); updateURL();
+      setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); setParamArray('locs', LOCS);
+      updateURL();
       renderGrid(); closeConfigModal();
-    });
-
-    document.getElementById('btnExport').addEventListener('click', function(){
-      const cfg = { ids: VIDEO_IDS, labels: LABELS, cols: parseInt(qs('#layout').value,10)||4 };
-      const text = JSON.stringify(cfg, null, 2);
-      navigator.clipboard.writeText(text).then(()=>{
-        alert('Config exportada. Abra o config.json no GitHub e cole o conteúdo.');
-      }).catch(()=>{
-        const blob = new Blob([text], {type:'application/json'});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'config.json'; a.click();
-        URL.revokeObjectURL(a.href);
-      });
     });
 
     if(!cfgUrl){ renderGrid(); }

@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard de Drones — YouTube Lives</title>
+  <meta name="description" content="Painel para espelhar múltiplas transmissões ao vivo do YouTube com autoplay e link compartilhável." />
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #121821;
+      --muted: #8aa0b6;
+      --accent: #2eaadc;
+      --accent-2: #44c4a1;
+      --danger: #e65f5c;
+      --text: #e6eef7;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+      --gap: 12px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial;
+      color: var(--text);
+      background: radial-gradient(1200px 800px at 10% -10%, #122233 0%, #0b0f14 60%);
+      letter-spacing: .2px;
+    }
+
+    header {
+      position: sticky; top: 0; z-index: 100;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: var(--gap);
+      padding: 12px clamp(10px, 3vw, 24px);
+      background: rgba(5, 8, 12, 0.8);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #1d2632;
+    }
+    h1 {
+      font-size: clamp(16px, 2.2vw, 22px);
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: .3px;
+    }
+    .tag { 
+      font-size: 12px; 
+      color: #a9c3db;
+      border: 1px solid #223146;
+      border-radius: 999px;
+      padding: 4px 8px;
+      margin-left: 8px;
+    }
+    .controls {
+      display: flex; gap: var(--gap); align-items: center; justify-content: flex-end;
+    }
+    .controls > * { flex: 0 0 auto; }
+
+    .input, .select, .button {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid #263243;
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+    }
+    .input, .select { min-width: 180px; }
+    .button {
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform .05s ease, box-shadow .2s ease, background .2s ease;
+      user-select: none;
+    }
+    .button:hover { transform: translateY(-1px); }
+    .button:active { transform: translateY(0); }
+    .button.accent { background: linear-gradient(90deg, var(--accent), #8dd9ff); color: #05202d; border: none; }
+    .button.success { background: linear-gradient(90deg, var(--accent-2), #84ffd8); color: #07221a; border: none; }
+    .button.danger { background: linear-gradient(90deg, #ff7a76, var(--danger)); color: #2b0b0a; border: none; }
+    .button.ghost { background: #0e141c; border: 1px dashed #2b3a50; color: #a9c3db; }
+
+    .grid {
+      padding: clamp(10px, 2.5vw, 24px);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--gap);
+    }
+    @media (max-width: 1400px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 1080px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 680px)  { .grid { grid-template-columns: 1fr; } }
+
+    .tile {
+      position: relative;
+      background: #0a0e14;
+      border: 1px solid #1d2836;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      aspect-ratio: 16/9;
+      display: flex; align-items: center; justify-content: center;
+      isolation: isolate;
+    }
+    .yt {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      border: 0;
+    }
+    .tile-header {
+      position: absolute; top: 8px; left: 8px; right: 8px;
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,0));
+      padding: 4px 6px;
+      z-index: 3;
+    }
+    .badge {
+      background: rgba(6, 170, 118, .9);
+      color: #031b14;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      border: 1px solid rgba(255,255,255,.15);
+    }
+    .label {
+      font-size: 12px; color: #cfe6ff;
+      padding: 3px 8px;
+      border-radius: 8px;
+      border: 1px solid #2a3b51;
+      background: rgba(9,14,20,.75);
+    }
+    .tile-actions {
+      display: flex; gap: 6px;
+    }
+    .icon-btn {
+      appearance: none; border: 1px solid #2a3b51; background: rgba(9,14,20,.75); color: #cfe6ff;
+      padding: 6px 8px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 12px;
+    }
+    .tile-footer {
+      position: absolute; bottom: 8px; left: 8px; right: 8px;
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      background: linear-gradient(0deg, rgba(0,0,0,.55), rgba(0,0,0,0));
+      padding: 4px 6px;
+      z-index: 3;
+    }
+    .muted-pill { background: #0e1621; border: 1px solid #2a3b51; color: #9ec1de; padding: 4px 8px; border-radius: 999px; font-size: 12px; }
+    .link { color: #8dd9ff; text-decoration: none; }
+    .empty-note {
+      color: var(--muted); text-align: center; font-size: 14px; padding: 8px;
+    }
+
+    .footer {
+      text-align: center; color: #7396b6; font-size: 12px; padding: 8px 16px 16px;
+    }
+
+    /* Fullscreen overlay */
+    .fs {
+      position: fixed; inset: 0; z-index: 200;
+      display: none;
+      background: #000;
+    }
+    .fs.active { display: block; }
+    .fs > .inner { position: absolute; inset: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard de Drones <span class="tag">YouTube • Autoplay</span></h1>
+
+    <div class="controls">
+      <select id="layout" class="select" title="Layout">
+        <option value="4">Layout: 4 colunas</option>
+        <option value="5">Layout: 5 colunas</option>
+        <option value="3">Layout: 3 colunas</option>
+        <option value="2">Layout: 2 colunas</option>
+      </select>
+
+      <input id="labels" class="input" placeholder="Rótulos (vírgula) ex: Drone 01, Drone 02, ...">
+      <input id="ids" class="input" placeholder="IDs das lives (vírgula)" />
+      <button id="apply" class="button accent">Aplicar</button>
+      <button id="share" class="button success" title="Copiar link compartilhável">Gerar Link</button>
+      <button id="clear" class="button ghost" title="Limpar configuração">Limpar</button>
+    </div>
+
+    <div class="controls">
+      <small style="color:#9fb7cc;">Dica: IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<strong>abc123</strong></em></small>
+    </div>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <div class="footer">Autoplay é permitido por navegadores apenas com <strong>áudio mútuo</strong>. Para ouvir um feed, clique em <em>Som</em> na tile desejada.</div>
+
+  <!-- Fullscreen overlay -->
+  <div class="fs" id="fs">
+    <div class="inner" id="fsInner"></div>
+  </div>
+
+  <script>
+    // --- Utilidades ---
+    const qs = (sel, el = document) => el.querySelector(sel);
+    const qsa = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+    const params = new URLSearchParams(location.search);
+
+    function getParamArray(name) {
+      const raw = params.get(name);
+      if (!raw) return [];
+      return raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    function setParamArray(name, arr) {
+      if (!arr || arr.length === 0) { params.delete(name); return; }
+      params.set(name, arr.join(','));
+    }
+
+    function updateURL() {
+      const url = location.pathname + '?' + params.toString();
+      history.replaceState({}, '', url);
+    }
+
+    function copyShareURL() {
+      const url = location.origin + location.pathname + '?' + params.toString();
+      navigator.clipboard.writeText(url).then(() => {
+        alert('Link copiado. Envie para os comandantes.\\n\\n' + url);
+      });
+    }
+
+    // --- Estado ---
+    let VIDEO_IDS = getParamArray('ids');
+    let LABELS = getParamArray('labels');
+    const COLS = parseInt(params.get('cols') || '4', 10);
+
+    // Preenche inputs com o que vier na URL
+    qs('#ids').value = VIDEO_IDS.join(', ');
+    qs('#labels').value = LABELS.join(', ');
+    qs('#layout').value = String(COLS);
+
+    // --- YouTube IFrame API ---
+    // Cria players gerenciáveis (podemos dar mute/unmute/ play)
+    let YT_API_READY = false;
+    let players = []; // {id, player, label}
+
+    function loadYTScript() {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.body.appendChild(tag);
+    }
+    loadYTScript();
+
+    window.onYouTubeIframeAPIReady = function() {
+      YT_API_READY = true;
+      render();
+    };
+
+    function render() {
+      const grid = qs('#grid');
+      grid.style.gridTemplateColumns = `repeat(${parseInt(qs('#layout').value, 10)}, 1fr)`;
+      grid.innerHTML = '';
+
+      // Sincroniza arrays
+      if (LABELS.length < VIDEO_IDS.length) {
+        for (let i = LABELS.length; i < VIDEO_IDS.length; i++) LABELS[i] = `Drone ${String(i+1).padStart(2,'0')}`;
+      }
+
+      players = [];
+
+      if (!VIDEO_IDS.length) {
+        const div = document.createElement('div');
+        div.className = 'tile';
+        div.innerHTML = `<div class="empty-note">
+          Insira <strong>IDs</strong> das lives acima (separados por vírgula) e clique em <strong>Aplicar</strong>.<br/>
+          Ex.: <code>abc123, def456, ghi789</code>
+        </div>`;
+        grid.appendChild(div);
+        return;
+      }
+
+      VIDEO_IDS.forEach((vid, index) => {
+        const label = LABELS[index] || `Drone ${String(index+1).padStart(2,'0')}`;
+        const tile = document.createElement('section');
+        tile.className = 'tile';
+        tile.dataset.index = index;
+
+        const header = document.createElement('div');
+        header.className = 'tile-header';
+        header.innerHTML = `
+          <span class="badge">Live</span>
+          <span class="label">${escapeHtml(label)}</span>
+          <div class="tile-actions">
+            <button class="icon-btn" data-action="sound">Som</button>
+            <button class="icon-btn" data-action="fullscreen">Tela cheia</button>
+            <button class="icon-btn" data-action="editar">Editar</button>
+          </div>
+        `;
+
+        const footer = document.createElement('div');
+        footer.className = 'tile-footer';
+        footer.innerHTML = `
+          <span class="muted-pill">🔇 Mutado (autoplay habilitado)</span>
+          <a class="link" href="https://www.youtube.com/watch?v=${encodeURIComponent(vid)}" target="_blank" rel="noopener">Abrir no YouTube ↗</a>
+        `;
+
+        // Contêiner para o player API
+        const playerWrap = document.createElement('div');
+        playerWrap.id = `ytp_${index}`;
+        playerWrap.className = 'yt';
+
+        tile.appendChild(header);
+        tile.appendChild(playerWrap);
+        tile.appendChild(footer);
+        grid.appendChild(tile);
+
+        // Cria o player
+        if (YT_API_READY) {
+          const player = new YT.Player(playerWrap.id, {
+            videoId: vid,
+            playerVars: {
+              autoplay: 1,
+              mute: 1,
+              playsinline: 1,
+              controls: 0,
+              rel: 0,
+              modestbranding: 1,
+              enablejsapi: 1,
+            },
+            events: {
+              'onReady': (e) => {
+                try { e.target.mute(); e.target.playVideo(); } catch (err) {}
+              },
+              'onStateChange': (e) => {
+                // 0 = ended, 1 = playing, 2 = paused, 3 = buffering, 5 = cued
+                if (e.data === 0) {
+                  // Em caso de término da live ou corte, tenta recarregar após 5s
+                  setTimeout(() => { try { e.target.playVideo(); } catch(err) {} }, 5000);
+                }
+              }
+            }
+          });
+          players.push({ id: vid, player, label, index });
+        }
+      });
+    }
+
+    // Segurança HTML
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, s => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[s]));
+    }
+
+    // --- Ações ---
+    qs('#apply').addEventListener('click', () => {
+      VIDEO_IDS = qs('#ids').value.split(',').map(s => s.trim()).filter(Boolean);
+      LABELS = qs('#labels').value.split(',').map(s => s.trim());
+      params.set('cols', qs('#layout').value);
+      setParamArray('ids', VIDEO_IDS);
+      setParamArray('labels', LABELS);
+      updateURL();
+      render();
+    });
+
+    qs('#share').addEventListener('click', () => {
+      if (!VIDEO_IDS.length) {
+        alert('Adicione pelo menos um ID antes de gerar o link.');
+        return;
+      }
+      params.set('cols', qs('#layout').value);
+      setParamArray('ids', VIDEO_IDS);
+      setParamArray('labels', LABELS);
+      copyShareURL();
+    });
+
+    qs('#clear').addEventListener('click', () => {
+      VIDEO_IDS = [];
+      LABELS = [];
+      qs('#ids').value = '';
+      qs('#labels').value = '';
+      ['ids','labels','cols'].forEach(k => params.delete(k));
+      updateURL();
+      render();
+    });
+
+    qs('#layout').addEventListener('change', () => {
+      params.set('cols', qs('#layout').value);
+      updateURL();
+      render();
+    });
+
+    // Delegação para botões das tiles
+    qs('#grid').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.icon-btn');
+      if (!btn) return;
+      const tile = ev.target.closest('.tile');
+      const idx = parseInt(tile?.dataset.index || '-1', 10);
+      const entry = players.find(p => p.index === idx);
+      if (!entry) return;
+
+      if (btn.dataset.action === 'sound') {
+        // Desmuta somente este feed e pausa os demais para evitar cacofonia
+        players.forEach(p => {
+          try {
+            if (p.index === idx) { p.player.unMute(); p.player.setVolume(100); }
+            else { p.player.mute(); }
+          } catch (e) {}
+        });
+      } else if (btn.dataset.action === 'fullscreen') {
+        openFullscreen(idx);
+      } else if (btn.dataset.action === 'editar') {
+        const newId = prompt('Novo ID do YouTube para "' + entry.label + '":', entry.id);
+        if (newId && newId !== entry.id) {
+          VIDEO_IDS[idx] = newId.trim();
+          setParamArray('ids', VIDEO_IDS);
+          updateURL();
+          render();
+        }
+      }
+    });
+
+    // --- Fullscreen ---
+    const fs = qs('#fs');
+    const fsInner = qs('#fsInner');
+
+    function openFullscreen(idx) {
+      const entry = players.find(p => p.index === idx);
+      if (!entry) return;
+      fs.classList.add('active');
+      fsInner.innerHTML = `<div id="fs_player" style="position:absolute;inset:0;"></div>`;
+      const fsPlayer = new YT.Player('fs_player', {
+        videoId: entry.id,
+        playerVars: { autoplay: 1, mute: 0, controls: 1, playsinline: 1, rel:0, modestbranding:1 },
+        events: {
+          'onReady': e => { try { e.target.playVideo(); } catch(err){} }
+        }
+      });
+      fs.addEventListener('click', closeFullscreen, { once: true });
+    }
+    function closeFullscreen() {
+      fs.classList.remove('active');
+      fsInner.innerHTML = '';
+    }
+
+    // Render inicial (se API ainda não estiver pronta, onYouTubeIframeAPIReady chamará render de novo)
+    if (!VIDEO_IDS.length) { render(); }
+  </script>
+</body>
+</html>

@@ -1,24 +1,21 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Operacional - Drones PM (Integrado)</title>
+  <title>Dashboard Operacional - Drones PM (Integrado + Configurar Equipes)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { box-sizing: border-box; }
     .video-container { transition: all 0.2s ease; }
     .video-container:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
-    .highlighted { box-shadow: 0 12px 34px rgba(59,130,246,0.4); outline: 3px solid #3b82f6; }
-    .status-indicator { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
     .grid-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
     @media (max-width: 1400px){ .grid-container { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 1024px){ .grid-container { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 640px) { .grid-container { grid-template-columns: 1fr; } }
     .aspect-video { position: relative; padding-top: 56.25%; }
     .abs-fill { position: absolute; inset: 0; }
-    .ytframe { border: 0; width: 100%; height: 100%; }
     .badge-live { background: #dc2626; }
     .tile-btn { font-size: 12px; padding: 4px 8px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; }
     .tile-btn:hover { background: rgba(255,255,255,.08); }
@@ -27,14 +24,11 @@
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
-  <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-40">
     <div class="flex flex-col gap-2 lg:flex-row lg:justify-between lg:items-center max-w-7xl mx-auto">
       <div class="flex items-center gap-4">
         <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z"/>
-          </svg>
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z"/></svg>
         </div>
         <div>
           <h1 class="text-xl font-bold">Dashboard Operacional - Drones PM</h1>
@@ -44,15 +38,15 @@
       </div>
       <div class="flex items-center gap-3">
         <div class="hidden sm:flex items-center gap-2">
-          <div class="w-3 h-3 bg-green-500 rounded-full status-indicator"></div>
+          <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
           <span class="text-sm">Sistema Ativo</span>
         </div>
         <button id="btnFullscreen" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Tela Cheia</button>
         <button id="btnShare" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Gerar Link</button>
+        <button id="btnConfig" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Configurar Equipes</button>
       </div>
     </div>
 
-    <!-- Controls -->
     <div class="mt-3 max-w-7xl mx-auto">
       <div class="flex flex-wrap items-center gap-2">
         <label class="text-xs text-gray-400">Layout</label>
@@ -71,48 +65,52 @@
         <button id="reload" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Recarregar config</button>
       </div>
       <p class="text-[11px] text-gray-400 mt-1">
-        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Para sincronizar com a equipe use <b>config remota</b> com <code>?cfg=config.json&refresh=10</code>.
+        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Use <code>?cfg=config.json&refresh=10</code> para sincronizar com a equipe.
       </p>
     </div>
   </header>
 
-  <!-- Featured View -->
-  <section id="featuredView" class="hidden mb-4 max-w-7xl mx-auto px-4">
-    <div class="bg-gray-800 rounded-lg p-3">
-      <div class="flex justify-between items-center mb-2">
-        <h2 class="text-base font-semibold">Visualização Destacada</h2>
-        <div class="flex gap-2">
-          <button id="fsSound" class="tile-btn">Som</button>
-          <button id="closeFeatured" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm">Fechar</button>
-        </div>
-      </div>
-      <div class="relative">
-        <div class="aspect-video">
-          <div id="fsContainer" class="abs-fill"></div>
-        </div>
-      </div>
-      <div id="fsMeta" class="flex items-center justify-between text-sm mt-2 text-gray-300">
-        <div><span id="fsLabel" class="font-semibold">—</span></div>
-        <div><a id="fsYT" href="#" target="_blank" class="text-blue-300 hover:underline">Abrir no YouTube ↗</a></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Grid View -->
   <main class="p-4 max-w-7xl mx-auto">
     <div id="gridContainer" class="grid-container"></div>
   </main>
 
-  <!-- Fullscreen API helpers -->
+  <!-- Modal: Configurar Equipes -->
+  <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+        <h3 class="text-lg font-semibold mb-4">Configurar Equipe</h3>
+        <form id="teamForm">
+          <div class="mb-3">
+            <label class="block text-sm mb-1">Nome da Equipe</label>
+            <input id="teamName" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+          </div>
+          <div class="mb-3">
+            <label class="block text-sm mb-1">Endereço da Operação (opcional)</label>
+            <input id="teamLocation" type="text" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm mb-1">URL do YouTube</label>
+            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
+          </div>
+          <div class="flex gap-3">
+            <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>
+            <button id="btnExport" type="button" class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-2 rounded">Exportar config.json</button>
+            <button id="btnCancel" type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded">Cancelar</button>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-3">“Adicionar” atualiza a página e o link compartilhável. Para sincronizar com todos via <code>config.json</code>, clique em <b>Exportar</b> e cole no arquivo do GitHub.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Fullscreen
     document.getElementById('btnFullscreen').addEventListener('click', () => {
       if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); }
       else { document.exitFullscreen(); }
     });
-  </script>
 
-  <!-- YouTube IFrame API + Dashboard Logic -->
-  <script>
+    // Utilities & state
     const qs=(s,e=document)=>e.querySelector(s); const qsa=(s,e=document)=>Array.from(e.querySelectorAll(s));
     const params=new URLSearchParams(location.search);
     const cfgUrl=params.get('cfg'); const refreshSec=parseInt(params.get('refresh')||'0',10);
@@ -123,12 +121,15 @@
     function setParamArray(name,arr){ if(!arr||arr.length===0){ params.delete(name); return;} params.set(name, arr.map(encodeURIComponent).join(',')); }
     function updateURL(){ const url=location.pathname+'?'+params.toString(); history.replaceState({},'',url); }
     function copyShareURL(){ const base=location.origin+location.pathname; const url=base+'?'+params.toString(); navigator.clipboard.writeText(url).then(()=>alert('Link copiado.\\n\\n'+url)); }
-    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39'}[s])); }
+    function youtubeIdFromUrl(url){ try{ if(url.includes('watch?v=')) return url.split('v=')[1].split('&')[0]; if(url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0]; }catch(_){ } return url.trim(); }
 
+    // Inputs init
     VIDEO_IDS=getParamArray('ids'); LABELS=getParamArray('labels');
     qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); qs('#layout').value=String(COLS);
-    if(cfgUrl) qs('#cfgNotice').classList.remove('hidden');
+    if(cfgUrl) document.getElementById('cfgNotice').classList.remove('hidden');
 
+    // Remote config
     async function loadRemoteConfig(alertOk=false){
       if(!cfgUrl) return;
       try{
@@ -168,6 +169,7 @@
     const tag=document.createElement('script'); tag.src="https://www.youtube.com/iframe_api"; document.body.appendChild(tag);
     window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
 
+    // Render grid
     function renderGrid(){
       const grid=qs('#gridContainer');
       grid.style.gridTemplateColumns=`repeat(${parseInt(qs('#layout').value,10)}, 1fr)`;
@@ -187,9 +189,7 @@
         const card=document.createElement('div'); card.className='video-container bg-gray-800 rounded-lg overflow-hidden';
         card.innerHTML=`
           <div class="relative">
-            <div class="aspect-video">
-              <div id="yt_${index}" class="abs-fill"></div>
-            </div>
+            <div class="aspect-video"><div id="yt_${index}" class="abs-fill"></div></div>
             <div class="absolute top-2 left-2 flex items-center gap-2">
               <span class="px-2 py-1 rounded text-xs bg-black/60 border border-white/10">${escapeHtml(label)}</span>
               <span class="px-2 py-1 rounded text-[10px] badge-live flex items-center gap-1">
@@ -224,6 +224,7 @@
       });
     }
 
+    // Actions
     document.addEventListener('click', (ev)=>{
       const btn=ev.target.closest('[data-action]'); if(!btn) return;
       const action=btn.getAttribute('data-action'); const idx=parseInt(btn.getAttribute('data-idx'),10);
@@ -235,22 +236,20 @@
       }
     });
 
+    let fsPlayerRef=null;
     function openFeatured(idx){
       const entry=players.find(p=>p.index===idx); if(!entry) return;
-      const box=qs('#featuredView'); box.classList.remove('hidden');
-      qs('#fsLabel').textContent=entry.label; qs('#fsYT').href=`https://www.youtube.com/watch?v=${encodeURIComponent(entry.id)}`;
-      if(fsPlayer){ try{ fsPlayer.destroy(); }catch(_){ } fsPlayer=null; }
-      qs('#fsContainer').innerHTML='<div id="fsPlayer" class="abs-fill"></div>';
-      fsPlayer=new YT.Player('fsPlayer', { videoId: entry.id, playerVars:{ autoplay:1, mute:0, controls:1, playsinline:1, rel:0, modestbranding:1 },
-        events:{ onReady:e=>{ try{ e.target.playVideo(); }catch(_){ } } } });
+      // Cria um modal simples de destaque usando fullscreen nativo do navegador (ou implemente overlay aqui)
+      if(!document.fullscreenElement){
+        document.documentElement.requestFullscreen();
+      }
+      // Abre player flutuante com som
+      if(fsPlayerRef){ try{ fsPlayerRef.destroy(); }catch(_){ } fsPlayerRef=null; }
+      const w=window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(entry.id)}`,'_blank');
+      // Alternativa minimalista: poderia montar um overlay com player incorporado, conforme a versão anterior.
     }
-    qs('#closeFeatured').addEventListener('click', ()=>{
-      qs('#featuredView').classList.add('hidden');
-      if(fsPlayer){ try{ fsPlayer.destroy(); }catch(_){ } fsPlayer=null; }
-    });
-    qs('#fsSound').addEventListener('click', ()=>{ if(fsPlayer){ try{ fsPlayer.unMute(); fsPlayer.setVolume(100); }catch(_){ } } });
 
-    // Controls
+    // Inputs / share
     qs('#apply').addEventListener('click', ()=>{
       VIDEO_IDS=qs('#ids').value.split(',').map(s=>s.trim()).filter(Boolean);
       LABELS=qs('#labels').value.split(',').map(s=>s.trim());
@@ -267,6 +266,43 @@
       params.set('cols', qs('#layout').value); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS);
       if(cfgUrl) params.set('cfg', cfgUrl); copyShareURL();
     });
+
+    // Modal handlers
+    function showConfigModal(){ document.getElementById('configModal').classList.remove('hidden'); }
+    function closeConfigModal(){ document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset(); }
+    document.getElementById('btnConfig').addEventListener('click', showConfigModal);
+    document.getElementById('btnCancel').addEventListener('click', closeConfigModal);
+
+    document.getElementById('btnAddTeam').addEventListener('click', function(e){
+      e.preventDefault();
+      const name = document.getElementById('teamName').value.trim();
+      const location = document.getElementById('teamLocation').value.trim();
+      const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
+      if(!name || !youtubeUrl){ alert('Preencha Nome da Equipe e URL do YouTube.'); return; }
+      const id = youtubeIdFromUrl(youtubeUrl);
+      VIDEO_IDS.push(id);
+      LABELS.push(name);
+      qs('#ids').value = VIDEO_IDS.join(', ');
+      qs('#labels').value = LABELS.join(', ');
+      params.set('cols', qs('#layout').value);
+      setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); updateURL();
+      renderGrid(); closeConfigModal();
+    });
+
+    document.getElementById('btnExport').addEventListener('click', function(){
+      const cfg = { ids: VIDEO_IDS, labels: LABELS, cols: parseInt(qs('#layout').value,10)||4 };
+      const text = JSON.stringify(cfg, null, 2);
+      navigator.clipboard.writeText(text).then(()=>{
+        alert('Config exportada. Abra o config.json no GitHub e cole o conteúdo.');
+      }).catch(()=>{
+        const blob = new Blob([text], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'config.json'; a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    });
+
+    if(!cfgUrl){ renderGrid(); }
   </script>
+  <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

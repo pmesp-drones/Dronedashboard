@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v8g -->
+  <!-- build: v8i -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
@@ -23,294 +23,188 @@
     .hidden-view{ display:none!important; }
   </style>
 
-  <!-- API do YouTube -->
   <script src="https://www.youtube.com/iframe_api"></script>
-
-  <script defer>
-  (function(){
-    const qs=(s,e=document)=>e.querySelector(s);
-
-    // ---- Estado & parâmetros ----
-    const params=new URLSearchParams(location.search);
-    const cfgUrl=params.get('cfg');
-    const refreshSec=parseInt(params.get('refresh')||'0',10);
-    const MODE=(params.get('mode')||'edit').toLowerCase();
-    const isView=MODE==='view';
-
-    // >>> padrão = 2 colunas
-    let COLS=parseInt(params.get('cols')||'2',10);
-
-    let VIDEO_IDS=[]; let LABELS=[]; let LOCS=[];
-    let YT_READY=false;
-
-    // ---- Utils ----
-    function escapeHtml(str){
-      const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
-      return String(str).replace(/[&<>"']/g, s=>map[s]);
-    }
-    function getParamArray(name){
-      const raw=params.get(name); if(!raw) return [];
-      return raw.split(',').map(decodeURIComponent).map(s=>s.trim()).filter(Boolean);
-    }
-    function setParamArray(name,arr){
-      if(!arr||!arr.length){ params.delete(name); return; }
-      params.set(name, arr.map(encodeURIComponent).join(','));
-    }
-    function updateURL(){ history.replaceState({},'',location.pathname+'?'+params.toString()); }
-    function youtubeIdFromUrl(url){
-      try{
-        if(url.includes('watch?v=')) return url.split('v=')[1].split('&')[0];
-        if(url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0];
-      }catch(_){}
-      return url.trim();
-    }
-
-    // ---- Inicialização ----
-    VIDEO_IDS=getParamArray('ids');
-    LABELS=getParamArray('labels');
-    LOCS=getParamArray('locs');
-
-    document.addEventListener('DOMContentLoaded', ()=>{
-      const layout=qs('#layout'); if(layout) layout.value=String(COLS);
-      if(!isView){
-        const idsEl=qs('#ids'), labEl=qs('#labels');
-        if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
-        if(labEl) labEl.value=LABELS.join(', ');
-      }
-      if(isView){
-        ['#btnShare','#btnConfig','#btnExport','#labels','#ids','#apply','#clear','#helperText']
-          .forEach(sel=>{ const el=qs(sel); if(el) el.classList.add('hidden-view'); });
-      }
-      const fsBtn=qs('#btnFullscreen');
-      if(fsBtn){ fsBtn.addEventListener('click', ()=>{
-        if(!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
-      });}
-    });
-
-    // ---- YouTube ----
-    window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
-
-    function renderGrid(){
-      const grid=qs('#gridContainer'); const layout=qs('#layout');
-      if(!grid||!layout) return;
-      grid.style.gridTemplateColumns=`repeat(${parseInt(layout.value,10)}, 1fr)`;
-      grid.innerHTML='';
-
-      if(LABELS.length<VIDEO_IDS.length){ for(let i=LABELS.length;i<VIDEO_IDS.length;i++) LABELS[i]=`Equipe ${String(i+1).padStart(2,'0')}`; }
-      if(LOCS.length<VIDEO_IDS.length){ for(let i=LOCS.length;i<VIDEO_IDS.length;i++) LOCS[i]=''; }
-
-      if(!VIDEO_IDS.length){
-        grid.innerHTML=isView ? 'Aguardando configuração do operador.' :
-          'Clique em <b>Inserir Equipe</b> ou preencha os campos e clique <b>Aplicar</b>.';
-        return;
-      }
-
-      VIDEO_IDS.forEach((id, idx)=>{
-        const name=LABELS[idx]||`Equipe ${idx+1}`;
-        const loc=LOCS[idx]||'';
-        const card=document.createElement('div'); card.className='video-card';
-card.innerHTML =
-  '<div class="relative video-box">'+
-    `<div id="yt_${idx}" class="player-fill"></div>`+
-    '<div class="absolute top-2 left-2 flex items-center gap-2">'+
-      '<span class="px-2 py-1 rounded text-[10px] badge-live flex items-center gap-1">'+
-        '<span class="w-2 h-2 bg-white rounded-full animate-pulse"></span> AO VIVO'+
-      '</span>'+
-    '</div>'+
-    '<div class="absolute top-2 right-2 flex items-center gap-2">'+
-      `<button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(id)}','_blank')">Tela cheia</button>`+
-    '</div>'+
-  '</div>'+
-  // Rodapé ajustado: fontes menores
-  '<div class="px-2 pt-1 pb-0 bg-gray-800/70">'+
-    `<h3 class="font-medium text-sm">${escapeHtml(name)}</h3>`+
-    `<p class="text-gray-400 text-[11px]">${escapeHtml(loc)}</p>`+
-  '</div>';
-
-        grid.appendChild(card);
-
-        if(YT_READY){
-          new YT.Player(`yt_${idx}`, {
-            videoId:id, width:'100%', height:'100%',
-            playerVars:{autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1},
-            events:{ onReady:e=>{ try{ e.target.mute(); e.target.playVideo(); }catch(_){}} }
-          });
-        }
-      });
-    }
-
-    // ---- Config remota ----
-    async function loadRemoteConfig(){
-      if(!cfgUrl) return;
-      try{
-        const res=await fetch(cfgUrl+(cfgUrl.includes('?')?'&':'?')+'_='+(Date.now()));
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        const json=await res.json();
-        VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; LOCS=json.locs||[]; COLS=Number(json.cols||COLS||2);
-        const layout=qs('#layout'); if(layout) layout.value=String(COLS);
-        if(!isView){
-          const idsEl=qs('#ids'), labEl=qs('#labels');
-          if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
-          if(labEl) labEl.value=LABELS.join(', ');
-        }
-        renderGrid();
-      }catch(e){ console.error('Falha ao carregar config remota:', e); }
-    }
-
-    document.addEventListener('DOMContentLoaded', ()=>{
-      if(cfgUrl){
-        loadRemoteConfig();
-        if(refreshSec>0){
-          setInterval(()=>{ loadRemoteConfig(); }, Math.max(5000, refreshSec*1000));
-        }
-      } else {
-        renderGrid();
-      }
-    });
-
-    // ---- Editor ----
-    document.addEventListener('DOMContentLoaded', ()=>{
-      if(isView) return;
-
-      qs('#apply')?.addEventListener('click', ()=>{
-        VIDEO_IDS=(qs('#ids').value||'').split(',').map(s=>s.trim()).filter(Boolean);
-        LABELS=(qs('#labels').value||'').split(',').map(s=>s.trim());
-        COLS=parseInt(qs('#layout').value,10)||2;
-        params.set('cols', COLS);
-        setParamArray('ids', VIDEO_IDS);
-        setParamArray('labels', LABELS);
-        if(LOCS.length) setParamArray('locs', LOCS);
-        updateURL(); renderGrid();
-      });
-
-      qs('#clear')?.addEventListener('click', ()=>{
-        VIDEO_IDS=[]; LABELS=[]; LOCS=[];
-        if(qs('#ids')) qs('#ids').value='';
-        if(qs('#labels')) qs('#labels').value='';
-        ['ids','labels','locs'].forEach(k=>params.delete(k));
-        updateURL(); renderGrid();
-      });
-
-      qs('#btnExport')?.addEventListener('click', ()=>{
-        const cfg={ ids:VIDEO_IDS, labels:LABELS, locs:LOCS, cols:parseInt(qs('#layout').value,10)||2 };
-        const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
-        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='config.json'; a.click();
-      });
-
-      qs('#btnShare')?.addEventListener('click', ()=>{
-        const base=location.origin+location.pathname;
-        const url=new URL(base);
-        url.searchParams.set('cfg', cfgUrl || 'config.json');
-        url.searchParams.set('mode','view');
-        url.searchParams.set('cols', qs('#layout').value||'2');
-        navigator.clipboard.writeText(url.toString()).then(()=>alert('Link de visualização copiado:\n\n'+url.toString()));
-      });
-
-      qs('#btnAddTeam')?.addEventListener('click', e=>{
-        e.preventDefault();
-        const name=qs('#teamName').value.trim();
-        const loc=qs('#teamLocation').value.trim();
-        const url=qs('#youtubeUrl').value.trim();
-        if(!name||!url){ alert('Preencha todos os campos'); return; }
-        const id=youtubeIdFromUrl(url);
-        VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc);
-        if(qs('#ids')) qs('#ids').value=VIDEO_IDS.join(', ');
-        if(qs('#labels')) qs('#labels').value=LABELS.join(', ');
-        params.set('cols', qs('#layout').value||'2');
-        setParamArray('ids', VIDEO_IDS);
-        setParamArray('labels', LABELS);
-        setParamArray('locs', LOCS);
-        updateURL();
-        renderGrid();
-        document.getElementById('configModal').classList.add('hidden');
-        document.getElementById('teamForm').reset();
-      });
-
-      qs('#layout')?.addEventListener('change', ()=>{ params.set('cols', qs('#layout').value); updateURL(); renderGrid(); });
-    });
-  })();
-  </script>
 </head>
-
 <body class="bg-gray-900 text-white min-h-screen">
-  <!-- Header -->
-  <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-40">
-    <div class="flex flex-col gap-2 lg:flex-row lg:justify-between lg:items-center max-w-7xl mx-auto">
-      <div class="flex items-center gap-4">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/3/34/Logo_PMESP.png" alt="PMESP" class="w-12 h-12 object-contain rounded-md bg-white/5 p-1">
-        <div>
-          <h1 class="text-lg lg:text-xl font-bold">Dashboard Programa de Policiamento com Drones</h1>
-          <p class="text-gray-400 text-xs lg:text-sm">Monitoramento em Tempo Real • YouTube Autoplay</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <button id="btnFullscreen" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Tela Cheia</button>
-        <button id="btnShare" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Gerar Link</button>
-        <button id="btnExport" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Exportar config</button>
-        <button id="btnConfig" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm"
-                onclick="document.getElementById('configModal').classList.remove('hidden')">
-          Inserir Equipe
-        </button>
-      </div>
-    </div>
 
-    <!-- Controles -->
-    <div class="mt-3 max-w-7xl mx-auto">
-      <div class="flex flex-wrap items-center gap-2">
-        <label class="text-xs text-gray-400">Layout</label>
-        <select id="layout" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
-          <option value="2">2 colunas</option>
-          <option value="3">3 colunas</option>
-          <option value="4">4 colunas</option>
-          <option value="5">5 colunas</option>
-        </select>
-        <input id="labels" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Rótulos (vírgula) ex: Equipe 01, Equipe 02, ..." />
-        <input id="ids" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="IDs do YouTube (vírgula)" />
-        <button id="apply" class="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm">Aplicar</button>
-        <button id="clear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Limpar</button>
+<!-- ======= BLOQUEIO SIMPLES (LOGIN UNIVERSAL) ======= -->
+<div id="authOverlay" class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70">
+  <div class="bg-gray-800 text-white w-full max-w-sm rounded-xl shadow-xl p-6">
+    <h2 class="text-lg font-semibold mb-4">Acesso restrito</h2>
+    <div class="space-y-3">
+      <div>
+        <label class="block text-sm mb-1">Usuário</label>
+        <input id="authUser" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="usuário">
       </div>
-      <p id="helperText" class="text-[11px] text-gray-400 mt-1">
-        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em>
-      </p>
-    </div>
-  </header>
-
-  <!-- Grid -->
-  <main class="p-4 max-w-7xl mx-auto">
-    <div id="gridContainer" class="grid-container"></div>
-  </main>
-
-  <!-- Modal Inserir -->
-  <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
-    <div class="flex items-center justify-center min-h-screen p-4">
-      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h3 class="text-lg font-semibold mb-4">Inserir Equipe</h3>
-        <form id="teamForm">
-          <div class="mb-3">
-            <label class="block text-sm mb-1">Nome da Equipe</label>
-            <input id="teamName" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
-          </div>
-          <div class="mb-3">
-            <label class="block text-sm mb-1">Endereço da Operação</label>
-            <input id="teamLocation" type="text" placeholder="Rua / Bairro / Ponto de referência"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm mb-1">URL do YouTube</label>
-            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
-          </div>
-          <div class="flex gap-3">
-            <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>
-            <button id="btnCancel" type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded"
-              onclick="document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();">
-              Cancelar
-            </button>
-          </div>
-        </form>
+      <div>
+        <label class="block text-sm mb-1">Senha</label>
+        <input id="authPass" type="password" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="senha">
       </div>
+      <button id="authBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded">Entrar</button>
+      <p id="authErr" class="text-red-400 text-sm hidden">Usuário ou senha incorretos.</p>
     </div>
   </div>
+</div>
+
+<script>
+  const AUTH_USER = 'OPERACAOCPM';
+  const AUTH_PASS = 'CAVPMDRONES';
+  const REMEMBER_MINUTES = 240; // 4 horas
+
+  function auth_ok_until() {
+    const v = localStorage.getItem('auth_ok_until');
+    return v ? parseInt(v,10) : 0;
+  }
+  function set_auth_ok() {
+    if (REMEMBER_MINUTES > 0) {
+      const until = Date.now() + REMEMBER_MINUTES*60*1000;
+      localStorage.setItem('auth_ok_until', String(until));
+    }
+  }
+  (function initAuth(){
+    if (auth_ok_until() > Date.now()) {
+      const ov = document.getElementById('authOverlay');
+      if (ov) ov.style.display = 'none';
+    }
+  })();
+  function doLogin(){
+    const u = document.getElementById('authUser').value.trim();
+    const p = document.getElementById('authPass').value;
+    const err = document.getElementById('authErr');
+    if (u === AUTH_USER && p === AUTH_PASS) {
+      set_auth_ok();
+      document.getElementById('authOverlay').style.display = 'none';
+    } else {
+      err.classList.remove('hidden');
+      setTimeout(()=>err.classList.add('hidden'), 2000);
+    }
+  }
+  document.getElementById('authBtn').addEventListener('click', doLogin);
+  document.getElementById('authPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+</script>
+<!-- ======= FIM DO BLOQUEIO ======= -->
+
+<!-- Header -->
+<header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-40">
+  <div class="flex flex-col gap-2 lg:flex-row lg:justify-between lg:items-center max-w-7xl mx-auto">
+    <div class="flex items-center gap-4">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/3/34/Logo_PMESP.png" alt="PMESP" class="w-12 h-12 object-contain rounded-md bg-white/5 p-1">
+      <div>
+        <h1 class="text-lg lg:text-xl font-bold">Dashboard Programa de Policiamento com Drones</h1>
+        <p class="text-gray-400 text-xs lg:text-sm">Monitoramento em Tempo Real • YouTube Autoplay</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="btnFullscreen" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Tela Cheia</button>
+      <button id="btnShare" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm">Gerar Link</button>
+      <button id="btnExport" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Exportar config</button>
+      <button id="btnConfig" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm"
+              onclick="document.getElementById('configModal').classList.remove('hidden')">
+        Inserir Equipe
+      </button>
+    </div>
+  </div>
+
+  <!-- Controles -->
+  <div class="mt-3 max-w-7xl mx-auto">
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="text-xs text-gray-400">Layout</label>
+      <select id="layout" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+        <option value="2">2 colunas</option>
+        <option value="3">3 colunas</option>
+        <option value="4">4 colunas</option>
+        <option value="5">5 colunas</option>
+      </select>
+      <input id="labels" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Rótulos (vírgula)" />
+      <input id="ids" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="IDs do YouTube (vírgula)" />
+      <button id="apply" class="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm">Aplicar</button>
+      <button id="clear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Limpar</button>
+    </div>
+  </div>
+</header>
+
+<!-- Grid -->
+<main class="p-4 max-w-7xl mx-auto">
+  <div id="gridContainer" class="grid-container"></div>
+</main>
+
+<!-- Modal Inserir -->
+<div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+      <h3 class="text-lg font-semibold mb-4">Inserir Equipe</h3>
+      <form id="teamForm">
+        <div class="mb-3">
+          <label class="block text-sm mb-1">Nome da Equipe</label>
+          <input id="teamName" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm mb-1">Endereço da Operação</label>
+          <input id="teamLocation" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm mb-1">URL do YouTube</label>
+          <input id="youtubeUrl" type="url" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+        </div>
+        <div class="flex gap-3">
+          <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>
+          <button type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded"
+                  onclick="document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Script principal -->
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+  const qs=(s,e=document)=>e.querySelector(s);
+  const params=new URLSearchParams(location.search);
+  const cfgUrl=params.get('cfg'); const refreshSec=parseInt(params.get('refresh')||'0',10);
+  const MODE=(params.get('mode')||'edit').toLowerCase(); const isView=MODE==='view';
+  let VIDEO_IDS=[]; let LABELS=[]; let LOCS=[]; let COLS=parseInt(params.get('cols')||'2',10);
+  let YT_READY=false;
+
+  function escapeHtml(str){const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};return String(str).replace(/[&<>"']/g,s=>map[s]);}
+  function youtubeIdFromUrl(url){try{if(url.includes('watch?v=')) return url.split('v=')[1].split('&')[0]; if(url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0];}catch(_){} return url.trim();}
+  function renderGrid(){
+    const grid=qs('#gridContainer'); grid.style.gridTemplateColumns=`repeat(${parseInt(qs('#layout').value,10)}, 1fr)`; grid.innerHTML='';
+    if(!VIDEO_IDS.length){grid.innerHTML=isView?'Aguardando configuração do operador.':'Clique em <b>Inserir Equipe</b>';return;}
+    VIDEO_IDS.forEach((id,idx)=>{
+      const name=LABELS[idx]||`Equipe ${idx+1}`; const loc=LOCS[idx]||'';
+      const card=document.createElement('div'); card.className='video-card';
+      card.innerHTML=
+        '<div class="relative video-box">'+
+          `<div id="yt_${idx}" class="player-fill"></div>`+
+          '<div class="absolute top-2 left-2 flex items-center gap-2">'+
+            '<span class="px-2 py-1 rounded text-[10px] badge-live flex items-center gap-1">'+
+              '<span class="w-2 h-2 bg-white rounded-full animate-pulse"></span> AO VIVO'+
+            '</span></div>'+
+          '<div class="absolute top-2 right-2 flex items-center gap-2">'+
+            `<button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(id)}','_blank')">Tela cheia</button>`+
+          '</div></div>'+
+        '<div class="px-2 pt-1 pb-0 bg-gray-800/70">'+
+          `<h3 class="font-medium text-sm">${escapeHtml(name)}</h3>`+
+          `<p class="text-gray-400 text-[11px]">${escapeHtml(loc)}</p>`+
+        '</div>';
+      grid.appendChild(card);
+      if(YT_READY){ new YT.Player(`yt_${idx}`,{videoId:id,width:'100%',height:'100%',playerVars:{autoplay:1,mute:1,playsinline:1,controls:0},events:{onReady:e=>{try{e.target.mute();e.target.playVideo();}catch(_){}}}}); }
+    });
+  }
+  window.onYouTubeIframeAPIReady=function(){YT_READY=true;renderGrid();}
+  document.getElementById('btnAddTeam').addEventListener('click',e=>{
+    e.preventDefault();
+    const name=qs('#teamName').value.trim(); const loc=qs('#teamLocation').value.trim(); const url=qs('#youtubeUrl').value.trim();
+    if(!name||!url){alert('Preencha todos os campos');return;}
+    const id=youtubeIdFromUrl(url); VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc); renderGrid();
+    document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();
+  });
+});
+</script>
+
 </body>
 </html>
 

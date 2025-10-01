@@ -1,16 +1,13 @@
-
 {
   "ids": [
+    "pZ-3ZvPLz3g",
     "z09mCD6nzHk",
     "oUanjma0aS8",
     "NvSp2_eljrI",
     "llszXlN8oCo",
     "ofHRVPvs4Dc",
     "67BCsiW-1Io",
-    "w_a73U0ImOU",
-    "0jUGiYZKAMg",
-    "pZ-3ZvPLz3g",
-    "OXeFcz3lEz4"
+    "0jUGiYZKAMg"
   ],
   "labels": [
     "Airport",
@@ -21,21 +18,18 @@
     "Airport",
     "Airport",
     "Airport",
-    "Airport",
-    "Airport"
+    ""
   ],
   "locs": [
+    "LON",
     "GRU",
     "GER",
     "LAX",
     "CGH",
     "HEA",
     "CHI",
-    "JFK",
     "HAV",
-    "AMS",
-    "LON",
-    "MIA"
+    "AMS"
   ],
   "cols": 2
 }

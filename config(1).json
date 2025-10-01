@@ -1,0 +1,34 @@
+{
+  "ids": [
+    "1XsXKD3RO5I",
+    "MjD3gnNFYUo",
+    "z09mCD6nzHk",
+    "llszXlN8oCo",
+    "XyHKBAmtDKA",
+    "pZ-3ZvPLz3g",
+    "0jUGiYZKAMg",
+    "67BCsiW-1Io"
+  ],
+  "labels": [
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT"
+  ],
+  "locs": [
+    "SFO",
+    "LAX",
+    "GRU",
+    "CGH",
+    "LIS",
+    "LON",
+    "AMS",
+    "HAV",
+    "CHI"
+  ],
+  "cols": 4
+}

@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v8-2025-10-01 -->
+  <!-- build: v8b-2025-10-01 -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
@@ -108,13 +107,19 @@
     let VIDEO_IDS=[]; let LABELS=[]; let LOCS=[]; let COLS=parseInt(params.get('cols')||'4',10);
     let players=[]; let YT_READY=false;
 
-    // fullscreen
-    qs('#btnFullscreen').addEventListener('click', () => {
+    const fsBtn = qs('#btnFullscreen'); if(fsBtn){ fsBtn.addEventListener('click', () => {
       if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); }
       else { document.exitFullscreen(); }
-    });
+    });}
 
-    // hide editor-only in view mode
+    // Modal helpers
+    function showConfigModal(){ const m=qs('#configModal'); if(m){ m.classList.remove('hidden'); } }
+    function closeConfigModal(){ const m=qs('#configModal'); if(m){ m.classList.add('hidden'); } const f=qs('#teamForm'); if(f){ f.reset(); } }
+
+    // Wire modal buttons (always)
+    const btnConfig = qs('#btnConfig'); if(btnConfig){ btnConfig.addEventListener('click', showConfigModal); }
+    const btnCancel = qs('#btnCancel'); if(btnCancel){ btnCancel.addEventListener('click', closeConfigModal); }
+
     if(isView){
       ['#btnShare','#btnConfig','#btnExport','#labels','#ids','#apply','#clear','#helperText']
         .forEach(sel => { const el=qs(sel); if(el) el.classList.add('hidden-view'); });
@@ -128,8 +133,8 @@
     function youtubeIdFromUrl(url){ try{ if(url.includes('watch?v=')) return url.split('v=')[1].split('&')[0]; if(url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0]; }catch(_){ } return url.trim(); }
 
     VIDEO_IDS=getParamArray('ids'); LABELS=getParamArray('labels'); LOCS=getParamArray('locs');
-    if(!isView){ qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); }
-    qs('#layout').value=String(COLS);
+    if(!isView){ const idsEl=qs('#ids'); const labEl=qs('#labels'); if(idsEl){ idsEl.value=VIDEO_IDS.join(', ');} if(labEl){ labEl.value=LABELS.join(', ');} }
+    const layoutEl=qs('#layout'); if(layoutEl){ layoutEl.value=String(COLS); }
 
     async function loadRemoteConfig(alertOk=false){
       if(!cfgUrl) return;
@@ -138,8 +143,8 @@
         if(!res.ok) throw new Error('HTTP '+res.status);
         const json=await res.json();
         VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; LOCS=json.locs||[]; COLS=Number(json.cols||COLS||4);
-        if(!isView){ qs('#ids').value=VIDEO_IDS.join(', '); qs('#labels').value=LABELS.join(', '); }
-        qs('#layout').value=String(COLS);
+        if(!isView){ const idsEl=qs('#ids'); const labEl=qs('#labels'); if(idsEl){ idsEl.value=VIDEO_IDS.join(', ');} if(labEl){ labEl.value=LABELS.join(', ');} }
+        if(layoutEl){ layoutEl.value=String(COLS); }
         params.set('cols', String(COLS)); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); if(LOCS.length) setParamArray('locs', LOCS); updateURL();
         renderGrid(); if(alertOk) alert('Config remota recarregada.');
       }catch(e){ if(alertOk) alert('Falha ao carregar config: '+e.message); }
@@ -219,44 +224,38 @@
     });
 
     if(!isView){
-      qs('#apply').addEventListener('click', ()=>{
+      const applyBtn=qs('#apply'); if(applyBtn){ applyBtn.addEventListener('click', ()=>{
         VIDEO_IDS=qs('#ids').value.split(',').map(s=>s.trim()).filter(Boolean);
         LABELS=qs('#labels').value.split(',').map(s=>s.trim());
         params.set('cols', qs('#layout').value); setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS);
         if(LOCS.length) setParamArray('locs', LOCS);
         updateURL(); renderGrid();
-      });
-      qs('#clear').addEventListener('click', ()=>{
+      });}
+      const clearBtn=qs('#clear'); if(clearBtn){ clearBtn.addEventListener('click', ()=>{
         VIDEO_IDS=[]; LABELS=[]; LOCS=[];
-        qs('#ids').value=''; qs('#labels').value=''; ['ids','labels','cols','locs'].forEach(k=>params.delete(k));
+        const idsEl=qs('#ids'); const labEl=qs('#labels'); if(idsEl) idsEl.value=''; if(labEl) labEl.value='';
+        ['ids','labels','cols','locs'].forEach(k=>params.delete(k));
         updateURL(); renderGrid();
-      });
+      });}
 
-      qs('#btnShare').addEventListener('click', ()=>{
+      const shareBtn=qs('#btnShare'); if(shareBtn){ shareBtn.addEventListener('click', ()=>{
         const base=location.origin+location.pathname;
         const viewURL = new URL(base, location.origin);
         viewURL.searchParams.set('cfg', cfgUrl || 'config.json');
         viewURL.searchParams.set('refresh', (refreshSec||10));
         viewURL.searchParams.set('mode', 'view');
         viewURL.searchParams.set('cols', qs('#layout').value);
-        navigator.clipboard.writeText(viewURL.toString()).then(()=>alert('Link (visualizador) copiado:
+        navigator.clipboard.writeText(viewURL.toString()).then(()=>alert('Link (visualizador) copiado:\n\n'+viewURL.toString()));
+      });}
 
-'+viewURL.toString()));
-      });
-
-      qs('#btnExport').addEventListener('click', ()=>{
+      const exportBtn=qs('#btnExport'); if(exportBtn){ exportBtn.addEventListener('click', ()=>{
         const cfg = { ids: VIDEO_IDS, labels: LABELS, locs: LOCS, cols: parseInt(qs('#layout').value,10) };
         const text = JSON.stringify(cfg, null, 2);
         const blob = new Blob([text], {type:'application/json'});
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'config.json'; document.body.appendChild(a); a.click(); a.remove();
-      });
+      });}
 
-      function showConfigModal(){ document.getElementById('configModal').classList.remove('hidden'); }
-      function closeConfigModal(){ document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset(); }
-      qs('#btnConfig').addEventListener('click', showConfigModal);
-      qs('#btnCancel').addEventListener('click', closeConfigModal);
-
-      qs('#btnAddTeam').addEventListener('click', function(e){
+      const addBtn=qs('#btnAddTeam'); if(addBtn){ addBtn.addEventListener('click', function(e){
         e.preventDefault();
         const name = qs('#teamName').value.trim();
         const locationStr = qs('#teamLocation').value.trim();
@@ -265,16 +264,15 @@
         const id = youtubeIdFromUrl(youtubeUrl);
 
         VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(locationStr);
-        qs('#ids').value = VIDEO_IDS.join(', ');
-        qs('#labels').value = LABELS.join(', ');
+        const idsEl=qs('#ids'); const labEl=qs('#labels'); if(idsEl){ idsEl.value = VIDEO_IDS.join(', ');} if(labEl){ labEl.value = LABELS.join(', ');} 
         params.set('cols', qs('#layout').value);
         setParamArray('ids', VIDEO_IDS); setParamArray('labels', LABELS); setParamArray('locs', LOCS);
         updateURL();
         renderGrid(); closeConfigModal();
-      });
+      });}
     }
 
-    qs('#layout').addEventListener('change', ()=>{ params.set('cols', qs('#layout').value); updateURL(); renderGrid(); });
+    const layoutEl2=qs('#layout'); if(layoutEl2){ layoutEl2.addEventListener('change', ()=>{ params.set('cols', qs('#layout').value); updateURL(); renderGrid(); }); }
   }); // DOMContentLoaded
   </script>
   <script src="https://www.youtube.com/iframe_api"></script>

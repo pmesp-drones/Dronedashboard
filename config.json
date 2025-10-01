@@ -1,15 +1,34 @@
 {
   "ids": [
-    "ID_YOUTUBE_1","ID_YOUTUBE_2","ID_YOUTUBE_3","ID_YOUTUBE_4","ID_YOUTUBE_5",
-    "ID_YOUTUBE_6","ID_YOUTUBE_7","ID_YOUTUBE_8","ID_YOUTUBE_9","ID_YOUTUBE_10",
-    "ID_YOUTUBE_11","ID_YOUTUBE_12","ID_YOUTUBE_13","ID_YOUTUBE_14","ID_YOUTUBE_15",
-    "ID_YOUTUBE_16","ID_YOUTUBE_17","ID_YOUTUBE_18","ID_YOUTUBE_19","ID_YOUTUBE_20"
+    "1XsXKD3RO5I",
+    "MjD3gnNFYUo",
+    "z09mCD6nzHk",
+    "llszXlN8oCo",
+    "XyHKBAmtDKA",
+    "pZ-3ZvPLz3g",
+    "0jUGiYZKAMg",
+    "67BCsiW-1Io"
   ],
   "labels": [
-    "Drone 01","Drone 02","Drone 03","Drone 04","Drone 05",
-    "Drone 06","Drone 07","Drone 08","Drone 09","Drone 10",
-    "Drone 11","Drone 12","Drone 13","Drone 14","Drone 15",
-    "Drone 16","Drone 17","Drone 18","Drone 19","Drone 20"
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT",
+    "AIRPORT"
+  ],
+  "locs": [
+    "SFO",
+    "LAX",
+    "GRU",
+    "CGH",
+    "LIS",
+    "LON",
+    "AMS",
+    "HAV",
+    "CHI"
   ],
   "cols": 4
 }

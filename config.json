@@ -1,34 +1,41 @@
+
 {
   "ids": [
-    "1XsXKD3RO5I",
-    "MjD3gnNFYUo",
     "z09mCD6nzHk",
+    "oUanjma0aS8",
+    "NvSp2_eljrI",
     "llszXlN8oCo",
-    "XyHKBAmtDKA",
-    "pZ-3ZvPLz3g",
+    "ofHRVPvs4Dc",
+    "67BCsiW-1Io",
+    "w_a73U0ImOU",
     "0jUGiYZKAMg",
-    "67BCsiW-1Io"
+    "pZ-3ZvPLz3g",
+    "OXeFcz3lEz4"
   ],
   "labels": [
-    "AIRPORT",
-    "AIRPORT",
-    "AIRPORT",
-    "AIRPORT",
-    "AIRPORT",
-    "AIRPORT",
-    "AIRPORT",
-    "AIRPORT"
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport",
+    "Airport"
   ],
   "locs": [
-    "SFO",
-    "LAX",
     "GRU",
+    "GER",
+    "LAX",
     "CGH",
-    "LIS",
-    "LON",
-    "AMS",
+    "HEA",
+    "CHI",
+    "JFK",
     "HAV",
-    "CHI"
+    "AMS",
+    "LON",
+    "MIA"
   ],
-  "cols": 4
+  "cols": 2
 }

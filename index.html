@@ -283,4 +283,60 @@
     </div>
 
     <div class="mt-3 max-w-7xl mx-auto">
-      <div class="flex flex-wrap items-center
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-xs text-gray-400">Layout</label>
+        <select id="layout" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+          <option value="4">4 colunas</option>
+          <option value="5">5 colunas</option>
+          <option value="3">3 colunas</option>
+          <option value="2">2 colunas</option>
+        </select>
+        <input id="labels" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Rótulos (vírgula) ex: Equipe 01, Equipe 02, ..." />
+        <input id="ids" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="IDs do YouTube (vírgula)" />
+        <button id="apply" class="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm">Aplicar</button>
+        <button id="clear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Limpar</button>
+      </div>
+      <p id="helperText" class="text-[11px] text-gray-400 mt-1">
+        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Para sincronizar com a equipe use <b>config remota</b> com <code>?cfg=config.json&refresh=10</code>.
+      </p>
+    </div>
+  </header>
+
+  <main class="p-4 max-w-7xl mx-auto">
+    <div id="gridContainer" class="grid-container"></div>
+  </main>
+
+  <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+        <h3 class="text-lg font-semibold mb-4">Inserir Equipe</h3>
+        <form id="teamForm">
+          <div class="mb-3">
+            <label class="block text-sm mb-1">Nome da Equipe</label>
+            <input id="teamName" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+          </div>
+          <div class="mb-3">
+            <label class="block text-sm mb-1">Endereço da Operação</label>
+            <input id="teamLocation" type="text" placeholder="Rua / Bairro / Ponto de referência"
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm mb-1">URL do YouTube</label>
+            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..."
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
+          </div>
+          <div class="flex gap-3">
+            <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>
+            <button id="btnCancel" type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded"
+                    onclick="document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+

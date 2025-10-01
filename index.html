@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v8f -->
+  <!-- build: v8g -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
@@ -26,7 +26,6 @@
   <!-- API do YouTube -->
   <script src="https://www.youtube.com/iframe_api"></script>
 
-  <!-- Script principal (defer para evitar “tela branca”) -->
   <script defer>
   (function(){
     const qs=(s,e=document)=>e.querySelector(s);
@@ -34,11 +33,11 @@
     // ---- Estado & parâmetros ----
     const params=new URLSearchParams(location.search);
     const cfgUrl=params.get('cfg');
-    const refreshSec=parseInt(params.get('refresh')||'0',10); // só atualiza se > 0
+    const refreshSec=parseInt(params.get('refresh')||'0',10);
     const MODE=(params.get('mode')||'edit').toLowerCase();
     const isView=MODE==='view';
 
-    // >>> ALTERADO: padrão agora é 2 colunas
+    // >>> padrão = 2 colunas
     let COLS=parseInt(params.get('cols')||'2',10);
 
     let VIDEO_IDS=[]; let LABELS=[]; let LOCS=[];
@@ -66,7 +65,7 @@
       return url.trim();
     }
 
-    // ---- Inicialização dos inputs ----
+    // ---- Inicialização ----
     VIDEO_IDS=getParamArray('ids');
     LABELS=getParamArray('labels');
     LOCS=getParamArray('locs');
@@ -78,12 +77,10 @@
         if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
         if(labEl) labEl.value=LABELS.join(', ');
       }
-      // esconder controles no visualizador
       if(isView){
         ['#btnShare','#btnConfig','#btnExport','#labels','#ids','#apply','#clear','#helperText']
           .forEach(sel=>{ const el=qs(sel); if(el) el.classList.add('hidden-view'); });
       }
-      // fullscreen
       const fsBtn=qs('#btnFullscreen');
       if(fsBtn){ fsBtn.addEventListener('click', ()=>{
         if(!document.fullscreenElement) document.documentElement.requestFullscreen();
@@ -125,8 +122,8 @@
               `<button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(id)}','_blank')">Tela cheia</button>`+
             '</div>'+
           '</div>'+
-          // >>> ALTERADO: p-3 -> p-2 para diminuir a distância da legenda
-          '<div class="p-2 bg-gray-800/70">'+
+          // >>> rodapé mais compacto
+          '<div class="px-2 pt-1 pb-0 bg-gray-800/70">'+
             `<h3 class="font-semibold">${escapeHtml(name)}</h3>`+
             `<p class="text-gray-300 text-xs">${escapeHtml(loc)}</p>`+
           '</div>';
@@ -136,15 +133,14 @@
           new YT.Player(`yt_${idx}`, {
             videoId:id, width:'100%', height:'100%',
             playerVars:{autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1},
-            events:{ onReady:e=>{ try{e.target.mute(); e.target.playVideo();}catch(_){}} ,
-                     onStateChange:e=>{ if(e.data===0){ setTimeout(()=>{ try{e.target.playVideo();}catch(_){} }, 5000);} } }
+            events:{ onReady:e=>{ try{ e.target.mute(); e.target.playVideo(); }catch(_){}} }
           });
         }
       });
     }
 
-    // ---- Config remota (só se refresh>0) ----
-    async function loadRemoteConfig(alertOk=false){
+    // ---- Config remota ----
+    async function loadRemoteConfig(){
       if(!cfgUrl) return;
       try{
         const res=await fetch(cfgUrl+(cfgUrl.includes('?')?'&':'?')+'_='+(Date.now()));
@@ -158,18 +154,14 @@
           if(labEl) labEl.value=LABELS.join(', ');
         }
         renderGrid();
-        if(alertOk) alert('Config remota recarregada.');
-      }catch(e){
-        console.error('Falha ao carregar config remota:', e);
-        if(alertOk) alert('Falha ao carregar config: '+e.message);
-      }
+      }catch(e){ console.error('Falha ao carregar config remota:', e); }
     }
 
     document.addEventListener('DOMContentLoaded', ()=>{
       if(cfgUrl){
-        loadRemoteConfig(false);
-        if(refreshSec>0){ // <<< só auto-recarrega se refresh for informado
-          setInterval(()=>{ loadRemoteConfig(false).catch(()=>{}); }, Math.max(5000, refreshSec*1000));
+        loadRemoteConfig();
+        if(refreshSec>0){
+          setInterval(()=>{ loadRemoteConfig(); }, Math.max(5000, refreshSec*1000));
         }
       } else {
         renderGrid();
@@ -180,12 +172,10 @@
     document.addEventListener('DOMContentLoaded', ()=>{
       if(isView) return;
 
-      const applyBtn=qs('#apply');
-      if(applyBtn) applyBtn.addEventListener('click', ()=>{
-        const idsEl=qs('#ids'), labEl=qs('#labels'), layout=qs('#layout');
-        VIDEO_IDS=(idsEl?.value||'').split(',').map(s=>s.trim()).filter(Boolean);
-        LABELS=(labEl?.value||'').split(',').map(s=>s.trim());
-        COLS=parseInt(layout.value,10)||2;
+      qs('#apply')?.addEventListener('click', ()=>{
+        VIDEO_IDS=(qs('#ids').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+        LABELS=(qs('#labels').value||'').split(',').map(s=>s.trim());
+        COLS=parseInt(qs('#layout').value,10)||2;
         params.set('cols', COLS);
         setParamArray('ids', VIDEO_IDS);
         setParamArray('labels', LABELS);
@@ -193,63 +183,50 @@
         updateURL(); renderGrid();
       });
 
-      const clearBtn=qs('#clear');
-      if(clearBtn) clearBtn.addEventListener('click', ()=>{
+      qs('#clear')?.addEventListener('click', ()=>{
         VIDEO_IDS=[]; LABELS=[]; LOCS=[];
-        const idsEl=qs('#ids'), labEl=qs('#labels');
-        if(idsEl) idsEl.value=''; if(labEl) labEl.value='';
+        if(qs('#ids')) qs('#ids').value='';
+        if(qs('#labels')) qs('#labels').value='';
         ['ids','labels','locs'].forEach(k=>params.delete(k));
         updateURL(); renderGrid();
       });
 
-      const exportBtn=qs('#btnExport');
-      if(exportBtn) exportBtn.addEventListener('click', ()=>{
-        const layout=qs('#layout');
-        const cfg={ ids: VIDEO_IDS.slice(), labels: LABELS.slice(), locs: LOCS.slice(), cols: parseInt(layout.value,10)||2 };
+      qs('#btnExport')?.addEventListener('click', ()=>{
+        const cfg={ ids:VIDEO_IDS, labels:LABELS, locs:LOCS, cols:parseInt(qs('#layout').value,10)||2 };
         const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
         const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='config.json'; a.click();
       });
 
-      const shareBtn=qs('#btnShare');
-      if(shareBtn) shareBtn.addEventListener('click', ()=>{
+      qs('#btnShare')?.addEventListener('click', ()=>{
         const base=location.origin+location.pathname;
         const url=new URL(base);
         url.searchParams.set('cfg', cfgUrl || 'config.json');
-        // NÃO colocamos refresh por padrão, para não reiniciar vídeos
-        url.searchParams.set('mode', 'view');
-        url.searchParams.set('cols', qs('#layout').value || '2');
-        navigator.clipboard.writeText(url.toString()).then(()=>alert('Link (visualizador) copiado:\\n\\n'+url.toString()));
+        url.searchParams.set('mode','view');
+        url.searchParams.set('cols', qs('#layout').value||'2');
+        navigator.clipboard.writeText(url.toString()).then(()=>alert('Link de visualização copiado:\n\n'+url.toString()));
       });
 
-      const addBtn=qs('#btnAddTeam');
-      if(addBtn) addBtn.addEventListener('click', (e)=>{
+      qs('#btnAddTeam')?.addEventListener('click', e=>{
         e.preventDefault();
         const name=qs('#teamName').value.trim();
         const loc=qs('#teamLocation').value.trim();
         const url=qs('#youtubeUrl').value.trim();
-        if(!name || !url){ alert('Preencha Nome da Equipe e URL do YouTube.'); return; }
+        if(!name||!url){ alert('Preencha todos os campos'); return; }
         const id=youtubeIdFromUrl(url);
-
         VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc);
-
-        // sincroniza inputs/URL
-        const idsEl=qs('#ids'), labEl=qs('#labels');
-        if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
-        if(labEl) labEl.value=LABELS.join(', ');
-        params.set('cols', qs('#layout').value || '2');
+        if(qs('#ids')) qs('#ids').value=VIDEO_IDS.join(', ');
+        if(qs('#labels')) qs('#labels').value=LABELS.join(', ');
+        params.set('cols', qs('#layout').value||'2');
         setParamArray('ids', VIDEO_IDS);
         setParamArray('labels', LABELS);
         setParamArray('locs', LOCS);
         updateURL();
-
         renderGrid();
         document.getElementById('configModal').classList.add('hidden');
         document.getElementById('teamForm').reset();
       });
 
-      // layout (ambos os modos)
-      const layout=qs('#layout');
-      if(layout) layout.addEventListener('change', ()=>{ params.set('cols', layout.value); updateURL(); renderGrid(); });
+      qs('#layout')?.addEventListener('change', ()=>{ params.set('cols', qs('#layout').value); updateURL(); renderGrid(); });
     });
   })();
   </script>
@@ -293,7 +270,7 @@
         <button id="clear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Limpar</button>
       </div>
       <p id="helperText" class="text-[11px] text-gray-400 mt-1">
-        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Para sincronizar com a equipe use <b>config remota</b> com <code>?cfg=config.json</code>. (Evite <code>refresh</code> para não reiniciar os vídeos.)
+        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em>
       </p>
     </div>
   </header>
@@ -335,3 +312,4 @@
   </div>
 </body>
 </html>
+

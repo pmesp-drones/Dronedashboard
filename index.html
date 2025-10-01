@@ -1,46 +1,50 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v8e -->
+  <!-- build: v8f -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
     body { box-sizing: border-box; }
-    .grid-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-    @media (max-width: 1400px){ .grid-container { grid-template-columns: repeat(3, 1fr); } }
-    @media (max-width: 1024px){ .grid-container { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 640px) { .grid-container { grid-template-columns: 1fr; } }
-    .video-card { background: var(--card); border: 1px solid #374151; border-radius: 12px; overflow: hidden; }
-    .video-box { aspect-ratio: 16 / 9; position: relative; background:#0b1220; }
-    .player-fill { position:absolute; inset:0; }
-    .player-fill iframe { width:100% !important; height:100% !important; display:block; }
-    .badge-live { background: #dc2626; }
-    .tile-btn { font-size: 12px; padding: 4px 8px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; }
-    .tile-btn:hover { background: rgba(255,255,255,.08); }
-    .hidden-view { display: none !important; }
+    .grid-container { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; }
+    @media (max-width:1400px){ .grid-container{ grid-template-columns:repeat(3,1fr);} }
+    @media (max-width:1024px){ .grid-container{ grid-template-columns:repeat(2,1fr);} }
+    @media (max-width:640px){ .grid-container{ grid-template-columns:1fr;} }
+    .video-card{ background:var(--card); border:1px solid #374151; border-radius:12px; overflow:hidden; }
+    .video-box{ aspect-ratio:16/9; position:relative; background:#0b1220; }
+    .player-fill{ position:absolute; inset:0; }
+    .player-fill iframe{ width:100%!important; height:100%!important; display:block; }
+    .badge-live{ background:#dc2626; }
+    .tile-btn{ font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.15); border-radius:8px; }
+    .tile-btn:hover{ background:rgba(255,255,255,.08); }
+    .hidden-view{ display:none!important; }
   </style>
-  <!-- API do YouTube primeiro -->
+
+  <!-- API do YouTube -->
   <script src="https://www.youtube.com/iframe_api"></script>
-  <!-- Nosso script principal com defer -->
+
+  <!-- Script principal (defer para evitar “tela branca”) -->
   <script defer>
   (function(){
     const qs=(s,e=document)=>e.querySelector(s);
 
-    // Estado & params
+    // ---- Estado & parâmetros ----
     const params=new URLSearchParams(location.search);
     const cfgUrl=params.get('cfg');
-    const refreshSec=parseInt(params.get('refresh')||'0',10);
+    const refreshSec=parseInt(params.get('refresh')||'0',10); // só atualiza se > 0
     const MODE=(params.get('mode')||'edit').toLowerCase();
     const isView=MODE==='view';
 
+    // >>> ALTERADO: padrão agora é 2 colunas
+    let COLS=parseInt(params.get('cols')||'2',10);
+
     let VIDEO_IDS=[]; let LABELS=[]; let LOCS=[];
-    let COLS=parseInt(params.get('cols')||'4',10);
     let YT_READY=false;
 
-    // Utils
+    // ---- Utils ----
     function escapeHtml(str){
       const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
       return String(str).replace(/[&<>"']/g, s=>map[s]);
@@ -62,47 +66,37 @@
       return url.trim();
     }
 
-    // Esconde controles no modo visualizador
-    document.addEventListener('DOMContentLoaded', ()=>{
-      if(isView){
-        ['#btnShare','#btnConfig','#btnExport','#labels','#ids','#apply','#clear','#helperText']
-          .forEach(sel => { const el=qs(sel); if(el) el.classList.add('hidden-view'); });
-      }
-    });
-
-    // Fullscreen
-    document.addEventListener('DOMContentLoaded', ()=>{
-      const fsBtn=qs('#btnFullscreen');
-      if(fsBtn) fsBtn.addEventListener('click', ()=>{
-        if(!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
-      });
-    });
-
-    // Inicializa de URL
+    // ---- Inicialização dos inputs ----
     VIDEO_IDS=getParamArray('ids');
     LABELS=getParamArray('labels');
     LOCS=getParamArray('locs');
 
     document.addEventListener('DOMContentLoaded', ()=>{
-      const layout=qs('#layout');
-      if(layout) layout.value=String(COLS);
+      const layout=qs('#layout'); if(layout) layout.value=String(COLS);
       if(!isView){
         const idsEl=qs('#ids'), labEl=qs('#labels');
         if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
         if(labEl) labEl.value=LABELS.join(', ');
       }
+      // esconder controles no visualizador
+      if(isView){
+        ['#btnShare','#btnConfig','#btnExport','#labels','#ids','#apply','#clear','#helperText']
+          .forEach(sel=>{ const el=qs(sel); if(el) el.classList.add('hidden-view'); });
+      }
+      // fullscreen
+      const fsBtn=qs('#btnFullscreen');
+      if(fsBtn){ fsBtn.addEventListener('click', ()=>{
+        if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+      });}
     });
 
-    // YouTube ready
+    // ---- YouTube ----
     window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
 
-    // Render da grade
     function renderGrid(){
-      const layout=qs('#layout');
-      const grid=qs('#gridContainer');
+      const grid=qs('#gridContainer'); const layout=qs('#layout');
       if(!grid||!layout) return;
-
       grid.style.gridTemplateColumns=`repeat(${parseInt(layout.value,10)}, 1fr)`;
       grid.innerHTML='';
 
@@ -110,9 +104,8 @@
       if(LOCS.length<VIDEO_IDS.length){ for(let i=LOCS.length;i<VIDEO_IDS.length;i++) LOCS[i]=''; }
 
       if(!VIDEO_IDS.length){
-        grid.innerHTML = isView
-          ? 'Aguardando configuração do operador.'
-          : 'Clique em <b>Inserir Equipe</b> ou preencha os campos e clique <b>Aplicar</b>.';
+        grid.innerHTML=isView ? 'Aguardando configuração do operador.' :
+          'Clique em <b>Inserir Equipe</b> ou preencha os campos e clique <b>Aplicar</b>.';
         return;
       }
 
@@ -132,7 +125,8 @@
               `<button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(id)}','_blank')">Tela cheia</button>`+
             '</div>'+
           '</div>'+
-          '<div class="p-3 bg-gray-800/70">'+
+          // >>> ALTERADO: p-3 -> p-2 para diminuir a distância da legenda
+          '<div class="p-2 bg-gray-800/70">'+
             `<h3 class="font-semibold">${escapeHtml(name)}</h3>`+
             `<p class="text-gray-300 text-xs">${escapeHtml(loc)}</p>`+
           '</div>';
@@ -142,29 +136,27 @@
           new YT.Player(`yt_${idx}`, {
             videoId:id, width:'100%', height:'100%',
             playerVars:{autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1},
-            events:{ onReady:e=>{ try{ e.target.mute(); e.target.playVideo(); }catch(_){ } } }
+            events:{ onReady:e=>{ try{e.target.mute(); e.target.playVideo();}catch(_){}} ,
+                     onStateChange:e=>{ if(e.data===0){ setTimeout(()=>{ try{e.target.playVideo();}catch(_){} }, 5000);} } }
           });
         }
       });
     }
 
-    // Carrega config remota (view e edit)
+    // ---- Config remota (só se refresh>0) ----
     async function loadRemoteConfig(alertOk=false){
       if(!cfgUrl) return;
       try{
         const res=await fetch(cfgUrl+(cfgUrl.includes('?')?'&':'?')+'_='+(Date.now()));
         if(!res.ok) throw new Error('HTTP '+res.status);
         const json=await res.json();
-        VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; LOCS=json.locs||[]; COLS=Number(json.cols||COLS||4);
-
-        document.addEventListener('DOMContentLoaded', ()=>{
-          const layout=qs('#layout'); if(layout) layout.value=String(COLS);
-          if(!isView){
-            const idsEl=qs('#ids'), labEl=qs('#labels');
-            if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
-            if(labEl) labEl.value=LABELS.join(', ');
-          }
-        });
+        VIDEO_IDS=json.ids||[]; LABELS=json.labels||[]; LOCS=json.locs||[]; COLS=Number(json.cols||COLS||2);
+        const layout=qs('#layout'); if(layout) layout.value=String(COLS);
+        if(!isView){
+          const idsEl=qs('#ids'), labEl=qs('#labels');
+          if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
+          if(labEl) labEl.value=LABELS.join(', ');
+        }
         renderGrid();
         if(alertOk) alert('Config remota recarregada.');
       }catch(e){
@@ -176,13 +168,15 @@
     document.addEventListener('DOMContentLoaded', ()=>{
       if(cfgUrl){
         loadRemoteConfig(false);
-        if(refreshSec>0) setInterval(()=>{ loadRemoteConfig(false).catch(()=>{}); }, Math.max(5000, refreshSec*1000));
+        if(refreshSec>0){ // <<< só auto-recarrega se refresh for informado
+          setInterval(()=>{ loadRemoteConfig(false).catch(()=>{}); }, Math.max(5000, refreshSec*1000));
+        }
       } else {
         renderGrid();
       }
     });
 
-    // ---- Handlers do EDITOR ----
+    // ---- Editor ----
     document.addEventListener('DOMContentLoaded', ()=>{
       if(isView) return;
 
@@ -191,7 +185,7 @@
         const idsEl=qs('#ids'), labEl=qs('#labels'), layout=qs('#layout');
         VIDEO_IDS=(idsEl?.value||'').split(',').map(s=>s.trim()).filter(Boolean);
         LABELS=(labEl?.value||'').split(',').map(s=>s.trim());
-        COLS=parseInt(layout.value,10)||4;
+        COLS=parseInt(layout.value,10)||2;
         params.set('cols', COLS);
         setParamArray('ids', VIDEO_IDS);
         setParamArray('labels', LABELS);
@@ -211,7 +205,7 @@
       const exportBtn=qs('#btnExport');
       if(exportBtn) exportBtn.addEventListener('click', ()=>{
         const layout=qs('#layout');
-        const cfg={ ids: VIDEO_IDS.slice(), labels: LABELS.slice(), locs: LOCS.slice(), cols: parseInt(layout.value,10)||4 };
+        const cfg={ ids: VIDEO_IDS.slice(), labels: LABELS.slice(), locs: LOCS.slice(), cols: parseInt(layout.value,10)||2 };
         const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
         const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='config.json'; a.click();
       });
@@ -221,10 +215,10 @@
         const base=location.origin+location.pathname;
         const url=new URL(base);
         url.searchParams.set('cfg', cfgUrl || 'config.json');
-        url.searchParams.set('refresh', refreshSec || 10);
+        // NÃO colocamos refresh por padrão, para não reiniciar vídeos
         url.searchParams.set('mode', 'view');
-        url.searchParams.set('cols', qs('#layout').value);
-        navigator.clipboard.writeText(url.toString()).then(()=>alert('Link (visualizador) copiado:\n\n'+url.toString()));
+        url.searchParams.set('cols', qs('#layout').value || '2');
+        navigator.clipboard.writeText(url.toString()).then(()=>alert('Link (visualizador) copiado:\\n\\n'+url.toString()));
       });
 
       const addBtn=qs('#btnAddTeam');
@@ -238,11 +232,11 @@
 
         VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc);
 
-        // Sincroniza inputs e URL
+        // sincroniza inputs/URL
         const idsEl=qs('#ids'), labEl=qs('#labels');
         if(idsEl) idsEl.value=VIDEO_IDS.join(', ');
         if(labEl) labEl.value=LABELS.join(', ');
-        params.set('cols', qs('#layout').value);
+        params.set('cols', qs('#layout').value || '2');
         setParamArray('ids', VIDEO_IDS);
         setParamArray('labels', LABELS);
         setParamArray('locs', LOCS);
@@ -253,15 +247,16 @@
         document.getElementById('teamForm').reset();
       });
 
-      // Layout (ambos os modos)
+      // layout (ambos os modos)
       const layout=qs('#layout');
       if(layout) layout.addEventListener('change', ()=>{ params.set('cols', layout.value); updateURL(); renderGrid(); });
     });
   })();
   </script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
 
+<body class="bg-gray-900 text-white min-h-screen">
+  <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-40">
     <div class="flex flex-col gap-2 lg:flex-row lg:justify-between lg:items-center max-w-7xl mx-auto">
       <div class="flex items-center gap-4">
@@ -282,14 +277,15 @@
       </div>
     </div>
 
+    <!-- Controles -->
     <div class="mt-3 max-w-7xl mx-auto">
       <div class="flex flex-wrap items-center gap-2">
         <label class="text-xs text-gray-400">Layout</label>
         <select id="layout" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm">
+          <option value="2">2 colunas</option>
+          <option value="3">3 colunas</option>
           <option value="4">4 colunas</option>
           <option value="5">5 colunas</option>
-          <option value="3">3 colunas</option>
-          <option value="2">2 colunas</option>
         </select>
         <input id="labels" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="Rótulos (vírgula) ex: Equipe 01, Equipe 02, ..." />
         <input id="ids" class="flex-1 min-w-[220px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm" placeholder="IDs do YouTube (vírgula)" />
@@ -297,15 +293,17 @@
         <button id="clear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">Limpar</button>
       </div>
       <p id="helperText" class="text-[11px] text-gray-400 mt-1">
-        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Para sincronizar com a equipe use <b>config remota</b> com <code>?cfg=config.json&refresh=10</code>.
+        IDs são o que vem após <code>watch?v=</code>. Ex.: <em>https://youtube.com/watch?v=<b>abc123</b></em> • Para sincronizar com a equipe use <b>config remota</b> com <code>?cfg=config.json</code>. (Evite <code>refresh</code> para não reiniciar os vídeos.)
       </p>
     </div>
   </header>
 
+  <!-- Grid -->
   <main class="p-4 max-w-7xl mx-auto">
     <div id="gridContainer" class="grid-container"></div>
   </main>
 
+  <!-- Modal Inserir -->
   <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -322,13 +320,12 @@
           </div>
           <div class="mb-4">
             <label class="block text-sm mb-1">URL do YouTube</label>
-            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..."
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
+            <input id="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" required>
           </div>
           <div class="flex gap-3">
             <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>
             <button id="btnCancel" type="button" class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded"
-                    onclick="document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();">
+              onclick="document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();">
               Cancelar
             </button>
           </div>
@@ -336,7 +333,5 @@
       </div>
     </div>
   </div>
-
 </body>
 </html>
-

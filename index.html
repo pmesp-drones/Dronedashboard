@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v9-rt-plus-viewcols -->
+  <!-- build: v9-rt-plus-viewcols+clear -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
@@ -67,9 +67,8 @@
     const params=new URLSearchParams(location.search);
     const MODE=(params.get('mode')||'edit').toLowerCase();
     const isView = MODE==='view';
-    const useRealtime = true; // viewer e editor usam RT
     let COLS=parseInt(params.get('cols')||'2',10);
-    let VIEW_COLS_OVERRIDE=null; // se o visualizador escolher um layout local, usamos isso
+    let VIEW_COLS_OVERRIDE=null; // seleção local do visualizador
     let VIDEO_IDS=[], LABELS=[], LOCS=[];
     let YT_READY=false;
 
@@ -120,7 +119,7 @@
       if(LOCS.length<VIDEO_IDS.length){   for(let i=LOCS.length;i<VIDEO_IDS.length;i++)   LOCS[i]=''; }
 
       if(!VIDEO_IDS.length){
-        grid.innerHTML=isView?'Aguardando configuração do operador.':'Clique em <b>Inserir Equipe</b>';
+        grid.innerHTML=isView?'Aguardando configuração do operador.':'Clique em <b>Inserir Equipe</b> ou use o botão <b>Inserir Equipe</b> no topo.';
         return;
       }
 
@@ -132,8 +131,17 @@
              <div class="absolute top-2 left-2 px-2 py-1 rounded text-[10px] badge-live flex items-center gap-1">
                <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span> AO VIVO
              </div>
-             <div class="absolute top-2 right-2">
+             <div class="absolute top-2 right-2 flex gap-2">
                <button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(id)}','_blank')">Tela cheia</button>
+               ${isView ? '' : `<button class="tile-btn" onclick="(function(){
+                   if(!confirm('Remover esta equipe?')) return;
+                   const idx=${i};
+                   VIDEO_IDS.splice(idx,1);
+                   LABELS.splice(idx,1);
+                   LOCS.splice(idx,1);
+                   saveRealtime();
+                   renderGrid();
+                 })()">Remover</button>`}
              </div>
            </div>
            <div class="px-2 pt-1 pb-0 bg-gray-800/70">
@@ -155,7 +163,6 @@
 
     /* ===== Realtime ===== */
     function saveRealtime(){
-      // guarda também cols para manter layout igual no viewer (se ele não tiver override local)
       dbRef.set({ ids:VIDEO_IDS, labels:LABELS, locs:LOCS, cols:COLS, ts:Date.now() });
     }
     function subscribeRealtime(){
@@ -198,17 +205,17 @@
     /* ===== UI Init ===== */
     document.addEventListener('DOMContentLoaded', ()=>{
       // Mostrar/ocultar botões conforme modo
-      qs('#btnShare')?.classList.toggle('hidden', isView);       // viewer não precisa "gerar link"
-      qs('#btnConfig')?.classList.toggle('hidden', isView);      // viewer não insere equipe
-      // layout: em AMBOS os modos aparece; mas só o editor salva no Firebase
-      // login: somente editor
+      qs('#btnShare')?.classList.toggle('hidden', isView);
+      qs('#btnConfig')?.classList.toggle('hidden', isView);
+      qs('#btnClearAll')?.classList.toggle('hidden', isView);
+
+      // login só no editor
       if(!isView){
         if(auth_ok_until()<=Date.now()){
           qs('#authOverlay').style.display='flex';
           qs('#authForm')?.addEventListener('submit', e=>{ e.preventDefault(); doLogin(); });
         }
       } else {
-        // viewer nunca mostra overlay
         qs('#authOverlay').style.display='none';
       }
 
@@ -252,6 +259,14 @@
         url.searchParams.set('cols', String(COLS));
         url.searchParams.set('sync','rt');
         navigator.clipboard.writeText(url.toString()).then(()=>alert('Link do VISUALIZADOR copiado:\n\n'+url.toString()));
+      });
+
+      // Limpar tudo (editor)
+      qs('#btnClearAll')?.addEventListener('click', ()=>{
+        if(!confirm('Apagar TODAS as equipes do dashboard?')) return;
+        VIDEO_IDS=[]; LABELS=[]; LOCS=[];
+        saveRealtime();
+        renderGrid();
       });
 
       // Start RT e primeira render
@@ -305,6 +320,9 @@
         <button id="btnConfig" class="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm"
                 onclick="document.getElementById('configModal').classList.remove('hidden')">
           Inserir Equipe
+        </button>
+        <button id="btnClearAll" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm">
+          Limpar
         </button>
       </div>
     </div>

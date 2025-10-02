@@ -209,18 +209,49 @@
   </main>
 
   <!-- Modal Inserir -->
-  <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
-    <div class="flex items-center justify-center min-h-screen p-4">
-      <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h3 class="text-lg font-semibold mb-4">Inserir Equipe</h3>
-        <form id="teamForm">
-          <div class="mb-3">
-            <label class="block text-sm mb-1">Nome da Equipe</label>
-            <input id="teamName" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
-          </div>
-          <div class="mb-3">
-            <label class="block text-sm mb-1">Endereço da Operação</label>
-            <input id="teamLocation" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white">
+ <!-- Modal Inserir -->
+<div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+      <h3 class="text-lg font-semibold mb-4 text-center">Inserir Equipe</h3>
+
+      <form id="teamForm" class="space-y-4">
+        <div>
+          <label class="block text-sm mb-1">Nome da Equipe</label>
+          <input id="teamName" type="text" required
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                 placeholder="Ex.: Equipe Alfa">
+        </div>
+
+        <div>
+          <label class="block text-sm mb-1">Endereço da Operação</label>
+          <input id="teamLocation" type="text" required
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                 placeholder="Rua / Bairro / Ponto de referência">
+        </div>
+
+        <div>
+          <label class="block text-sm mb-1">URL do YouTube</label>
+          <input id="youtubeUrl" type="url" required
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                 placeholder="https://www.youtube.com/watch?v=abc123">
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">
+            Adicionar
+          </button>
+          <button type="button"
+                  class="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded"
+                  onclick="document.getElementById('configModal').classList.add('hidden'); document.getElementById('teamForm').reset();">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+ay-700 border border-gray-600 rounded px-3 py-2 text-white">
           </div>
           <div class="mb-4">
             <label class="block text-sm mb-1">URL do YouTube</label>

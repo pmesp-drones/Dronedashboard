@@ -225,24 +225,27 @@
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
 
-  <!-- Overlay de Login -->
-  <div id="authOverlay" class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70">
-    <div class="bg-gray-800 text-white w-full max-w-sm rounded-xl shadow-xl p-6">
-      <h2 class="text-lg font-semibold mb-4">Acesso restrito</h2>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm mb-1">Usuário</label>
-          <input id="authUser" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="usuário">
-        </div>
-        <div>
-          <label class="block text-sm mb-1">Senha</label>
-          <input id="authPass" type="password" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="senha">
-        </div>
-        <button id="authBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded">Entrar</button>
-        <p id="authErr" class="text-red-400 text-sm hidden">Usuário ou senha incorretos.</p>
+<!-- Overlay de Login -->
+<div id="authOverlay" class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70">
+  <div class="bg-gray-800 text-white w-full max-w-sm rounded-xl shadow-xl p-6">
+    <h2 class="text-lg font-semibold mb-4">Acesso restrito</h2>
+
+    <!-- AGORA É UM FORM -->
+    <form id="authForm" class="space-y-3">
+      <div>
+        <label class="block text-sm mb-1">Usuário</label>
+        <input id="authUser" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="usuário" autocomplete="username">
       </div>
-    </div>
+      <div>
+        <label class="block text-sm mb-1">Senha</label>
+        <input id="authPass" type="password" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2" placeholder="senha" autocomplete="current-password">
+      </div>
+      <button id="authBtn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded">Entrar</button>
+      <p id="authErr" class="text-red-400 text-sm hidden">Usuário ou senha incorretos.</p>
+    </form>
   </div>
+</div>
+
 
   <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-40">

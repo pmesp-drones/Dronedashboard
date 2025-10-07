@@ -27,7 +27,6 @@
   </style>
   <!-- YouTube IFrame API -->
   <script>
-    // Carrega API de forma assíncrona
     (function(){
       const tag = document.createElement('script');
       tag.src = "https://www.youtube.com/iframe_api";
@@ -42,14 +41,12 @@
       <h1 class="text-xl font-semibold">Dashboard Programa de Policiamento com Drones</h1>
       <span class="badge">v9-rt-plus-viewcols+clear</span>
       <div class="ml-auto flex flex-wrap items-center gap-2">
-        <!-- Toggle Editor/Visualizador -->
         <label class="text-sm opacity-80">Modo:</label>
         <select id="modeSelect" class="rounded px-2 py-1 text-black">
           <option value="viewer">Visualizador</option>
           <option value="editor">Editor</option>
         </select>
 
-        <!-- Controle global de qualidade -->
         <label class="text-sm opacity-80">Qualidade padrão:</label>
         <select id="globalQuality" class="rounded px-2 py-1 text-black">
           <option value="tiny">144p</option>
@@ -87,16 +84,15 @@
   <script>
     // ---------- Armazenamento ----------
     const STORAGE_KEY = 'droneLivesV2';
-    const QUALITY_KEY = 'defaultQualityV2'; // novo padrão
-    const DEFAULT_QUALITY = 'tiny'; // 144p padrão
+    const QUALITY_KEY = 'defaultQualityV2';         // qualidade padrão do dashboard
+    const DEFAULT_QUALITY = 'tiny';                 // 144p padrão (persistente)
 
-    // Migra se não existir
     if (!localStorage.getItem(QUALITY_KEY)) {
       localStorage.setItem(QUALITY_KEY, DEFAULT_QUALITY);
     }
 
     // ---------- Estado ----------
-    let players = {}; // id -> YT.Player
+    let players = {}; // playerDivId -> YT.Player
     let lives = loadLives();
     let ytReady = false;
 
@@ -105,55 +101,74 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw){ return JSON.parse(raw); }
       }catch(e){}
-      return []; // começa vazio se não houver nada salvo
+      return [];
     }
-
-    function saveLives(){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(lives));
-    }
-
-    function getDefaultQuality(){
-      return localStorage.getItem(QUALITY_KEY) || DEFAULT_QUALITY;
-    }
-
-    function setDefaultQuality(q){
-      localStorage.setItem(QUALITY_KEY, q);
-    }
+    function saveLives(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(lives)); }
+    function getDefaultQuality(){ return localStorage.getItem(QUALITY_KEY) || DEFAULT_QUALITY; }
+    function setDefaultQuality(q){ localStorage.setItem(QUALITY_KEY, q); }
 
     // ---------- Util ----------
     function extractVideoId(input){
       if (!input) return null;
-      // Aceita ID puro ou URLs /live/ /watch?v= /shorts/ etc.
       try{
-        if (/^[-_a-zA-Z0-9]{11}$/.test(input)) return input; // id puro
+        if (/^[-_a-zA-Z0-9]{11}$/.test(input)) return input; // id clássico
         const u = new URL(input);
         if (u.hostname.includes('youtube.com')){
           if (u.pathname.startsWith('/live/')) return u.pathname.split('/live/')[1].split(/[?&]/)[0];
           if (u.pathname.startsWith('/watch')) return u.searchParams.get('v');
           if (u.pathname.startsWith('/shorts/')) return u.pathname.split('/shorts/')[1].split(/[?&]/)[0];
+          if (u.pathname.startsWith('/embed/'))  return u.pathname.split('/embed/')[1].split(/[?&]/)[0];
         }
         if (u.hostname === 'youtu.be'){
           return u.pathname.slice(1).split(/[?&]/)[0];
         }
       }catch(e){
-        // não era URL, pode ser ID com tamanho diferente (algumas lives têm id longo)
-        // fallback: retorna input cru e deixa o iframe tentar (alguns players aceitam IDs maiores)
-        return input;
+        return input; // pode ser ID diferente (lives longas)
       }
       return null;
     }
 
     function humanQualityLabel(q){
       const map = {
-        tiny: '144p',
-        small: '240p',
-        medium: '360p',
-        large: '480p',
-        hd720: '720p',
-        hd1080: '1080p',
-        highres: 'Máx.'
+        tiny: '144p', small: '240p', medium: '360p', large: '480p',
+        hd720: '720p', hd1080: '1080p', highres: 'Máx.'
       };
       return map[q] || q;
+    }
+
+    // pega o melhor nível disponível dado um pedido (ex.: se 144p não existir)
+    function pickAvailableQuality(requested, available){
+      // ordem de baixo para cima (economia de banda)
+      const order = ['tiny','small','medium','large','hd720','hd1080','highres'];
+      const set = new Set(available || []);
+      if (set.has(requested)) return requested;
+      // tenta o mesmo ou o imediatamente abaixo
+      for (let i = 0; i < order.length; i++){
+        if (order[i] === requested){
+          // varre pra baixo
+          for (let j = i; j >= 0; j--){
+            if (set.has(order[j])) return order[j];
+          }
+          // se nada pra baixo, pega o menor disponível
+          for (let o of order){ if (set.has(o)) return o; }
+        }
+      }
+      // fallback: mantém pedido
+      return requested;
+    }
+
+    // reforça qualidade por alguns ciclos (YT às vezes ignora de 1ª)
+    function enforceQuality(player, desiredQ, cycles = 6, intervalMs = 500){
+      let count = 0;
+      const iv = setInterval(()=>{
+        try{
+          const avail = player.getAvailableQualityLevels ? player.getAvailableQualityLevels() : [];
+          const q = pickAvailableQuality(desiredQ, avail);
+          player.setPlaybackQuality && player.setPlaybackQuality(q);
+        }catch(_){}
+        count++;
+        if (count >= cycles) clearInterval(iv);
+      }, intervalMs);
     }
 
     // ---------- Render ----------
@@ -190,9 +205,13 @@
         playerBox.innerHTML = `<div id="${playerDivId}" style="width:100%; height:100%;"></div>`;
         card.appendChild(playerBox);
 
-        // footer (resolução por live)
+        // footer (seletor por live)
         const footer = document.createElement('div');
         footer.className = 'card-footer';
+
+        const lbl = document.createElement('span');
+        lbl.className = 'text-sm opacity-80';
+        lbl.textContent = 'Resolução:';
 
         const qualitySelect = document.createElement('select');
         qualitySelect.className = 'rounded px-2 py-1 text-black';
@@ -200,27 +219,33 @@
           const opt = document.createElement('option');
           opt.value = q;
           opt.textContent = humanQualityLabel(q);
-          if ((live.quality || getDefaultQuality()) === q){ opt.selected = true; }
           qualitySelect.appendChild(opt);
         });
+
+        // valor inicial (por live ou default)
+        qualitySelect.value = (live.quality || getDefaultQuality());
+
+        // mudança: salva e aplica no player
         qualitySelect.addEventListener('change', ()=>{
           live.quality = qualitySelect.value;
           saveLives();
           const p = players[playerDivId];
-          if (p && p.setPlaybackQuality){
-            p.setPlaybackQuality(live.quality);
+          if (p){
+            const avail = p.getAvailableQualityLevels ? p.getAvailableQualityLevels() : [];
+            const q = pickAvailableQuality(live.quality, avail);
+            try{
+              p.setPlaybackQuality && p.setPlaybackQuality(q);
+              // reforça logo após
+              enforceQuality(p, q, 6, 400);
+            }catch(_){}
           }
         });
-
-        const lbl = document.createElement('span');
-        lbl.className = 'text-sm opacity-80';
-        lbl.textContent = 'Resolução desta live:';
 
         footer.appendChild(lbl);
         footer.appendChild(qualitySelect);
         card.appendChild(footer);
 
-        // Eventos de header (remover)
+        // eventos de remover
         header.querySelectorAll('[data-action="remove"]').forEach(btn=>{
           btn.addEventListener('click', ()=>{
             lives.splice(idx,1);
@@ -232,24 +257,24 @@
         grid.appendChild(card);
 
         // cria player quando API pronta
-        createPlayerWhenReady(playerDivId, vid, live);
+        createPlayerWhenReady(playerDivId, vid, live, qualitySelect);
       });
     }
 
-    function createPlayerWhenReady(divId, videoId, live){
+    function createPlayerWhenReady(divId, videoId, live, selectEl){
       if (ytReady){
-        makePlayer(divId, videoId, live);
+        makePlayer(divId, videoId, live, selectEl);
       } else {
         const iv = setInterval(()=>{
           if (ytReady){
             clearInterval(iv);
-            makePlayer(divId, videoId, live);
+            makePlayer(divId, videoId, live, selectEl);
           }
         }, 150);
       }
     }
 
-    function makePlayer(divId, videoId, live){
+    function makePlayer(divId, videoId, live, selectEl){
       try{
         const p = new YT.Player(divId, {
           videoId: videoId,
@@ -263,17 +288,27 @@
           events: {
             onReady: (e)=>{
               players[divId] = e.target;
-              // Define qualidade padrão 144p (ou a salva por live)
-              const q = live.quality || getDefaultQuality();
-              safeSetQuality(e.target, q);
-              // Play (autoplay depende do mute)
+              const desired = live.quality || getDefaultQuality();
+
+              // tenta aplicar o melhor nível disponível para a live
+              const avail = e.target.getAvailableQualityLevels ? e.target.getAvailableQualityLevels() : [];
+              const q = pickAvailableQuality(desired, avail);
+              // atualiza o select (pode cair para 240p etc. se 144p não existir)
+              selectEl.value = q;
+              live.quality = q;
+              saveLives();
+
               try { e.target.playVideo(); } catch(_){}
+              try { e.target.setPlaybackQuality && e.target.setPlaybackQuality(q); } catch(_){}
+              // reforça durante ~3s
+              enforceQuality(e.target, q, 6, 500);
             },
             onStateChange: (e)=>{
-              // Quando começa a tocar, reforça qualidade (o YouTube às vezes muda sozinho)
-              if (e.data === YT.PlayerState.PLAYING){
-                const q = live.quality || getDefaultQuality();
-                safeSetQuality(e.target, q);
+              if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING){
+                const desired = live.quality || getDefaultQuality();
+                const avail = e.target.getAvailableQualityLevels ? e.target.getAvailableQualityLevels() : [];
+                const q = pickAvailableQuality(desired, avail);
+                try { e.target.setPlaybackQuality && e.target.setPlaybackQuality(q); } catch(_){}
               }
             }
           }
@@ -283,16 +318,7 @@
       }
     }
 
-    function safeSetQuality(player, q){
-      try{
-        // Em alguns navegadores, setPlaybackQuality pode ser "sugerido" e não garantido
-        if (player && player.setPlaybackQuality){
-          player.setPlaybackQuality(q);
-        }
-      }catch(_){}
-    }
-
-    // Chamado pela API do YouTube globalmente
+    // Chamado pela API do YouTube
     window.onYouTubeIframeAPIReady = function(){
       ytReady = true;
       render();
@@ -302,25 +328,18 @@
     function isEditor(){
       return (document.getElementById('modeSelect').value === 'editor');
     }
-
     function applyMode(){
       const panel = document.getElementById('editorPanel');
       const viewerHidden = !isEditor();
       panel.hidden = viewerHidden;
-      // esconde botões de remover quando viewer
       document.querySelectorAll('.hidden-when-viewer').forEach(el=>{
-        if (el.closest('#editorPanel')) return; // o painel inteiro já fica hidden
+        if (el.closest('#editorPanel')) return;
         if (viewerHidden) el.setAttribute('hidden','');
         else el.removeAttribute('hidden');
       });
     }
+    document.getElementById('modeSelect').addEventListener('change', applyMode);
 
-    // ---------- Controles Globais ----------
-    document.getElementById('modeSelect').addEventListener('change', ()=>{
-      applyMode();
-    });
-
-    // Inicializa modo a partir de query ?mode=viewer|editor (opcional)
     (function initModeFromQuery(){
       const qs = new URLSearchParams(location.search);
       const m = qs.get('mode');
@@ -330,6 +349,7 @@
       applyMode();
     })();
 
+    // ---------- Controles Globais ----------
     const globalQualitySelect = document.getElementById('globalQuality');
     globalQualitySelect.value = getDefaultQuality();
 
@@ -339,13 +359,21 @@
 
     document.getElementById('applyAllBtn').addEventListener('click', ()=>{
       const q = globalQualitySelect.value;
-      // Atualiza default e todas as lives visíveis
       setDefaultQuality(q);
       lives = lives.map(l => ({...l, quality: q}));
       saveLives();
-      // Aplica nos players atuais
-      Object.values(players).forEach(p=> safeSetQuality(p, q));
-      // Atualiza selects individuais
+
+      // aplica nos players atuais com fallback para níveis disponíveis
+      Object.values(players).forEach(p=>{
+        const avail = p.getAvailableQualityLevels ? p.getAvailableQualityLevels() : [];
+        const best = pickAvailableQuality(q, avail);
+        try {
+          p.setPlaybackQuality && p.setPlaybackQuality(best);
+          enforceQuality(p, best, 6, 400);
+        }catch(_){}
+      });
+
+      // atualiza selects individuais
       document.querySelectorAll('.card-footer select').forEach(sel=>{
         sel.value = q;
       });
@@ -375,7 +403,7 @@
       }
     });
 
-    // ---------- “Failsafe” caso API do YT demore ----------
+    // ---------- Failsafe ----------
     setTimeout(()=>{ if (!ytReady) render(); }, 2000);
   </script>
 </body>

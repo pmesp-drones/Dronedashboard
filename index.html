@@ -4,8 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v9-rt-plus-viewcols+clear -->
+
+  <!-- Tailwind via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+
   <style>
     :root { --card:#111827; }
     body { background:#111827; color:white; box-sizing:border-box; }
@@ -13,18 +15,18 @@
     @media (max-width:1024px){ .grid-container{ grid-template-columns:repeat(2,1fr);} }
     @media (max-width:640px){  .grid-container{ grid-template-columns:1fr;} }
     .video-card{ background:#1f2937; border-radius:12px; overflow:hidden; border:1px solid #374151; }
-    .video-box{ aspect-ratio:16/9; position:relative; cursor:move; }
+    .video-box{ aspect-ratio:16/9; position:relative; }
     .player-fill{ position:absolute; inset:0; }
-    .player-fill iframe{ width:100%!important; height:100%!important; display:block; }
-    .badge-live{ background:#dc2626; }
+    .player-fill iframe{ width:100%!important; height:100%!important; display:block; border:0; }
     .tile-btn{ font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.15); border-radius:8px; }
     .tile-btn:hover{ background:rgba(255,255,255,.08); }
     .drag-over{ outline:2px dashed #60a5fa; outline-offset:-6px; }
     .hidden { display:none!important; }
   </style>
 
-  <!-- YouTube API -->
+  <!-- YouTube Iframe API -->
   <script src="https://www.youtube.com/iframe_api"></script>
+
   <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -33,20 +35,20 @@
   (function(){
     const qs=(s,e=document)=>e.querySelector(s);
 
-    /* ===== Login universal (apenas Editor) ===== */
+    /* ========= Login simples (somente no modo editor) ========= */
     const AUTH_USER='OPERACAOCPM';
     const AUTH_PASS='CAVPMDRONES';
     const REMEMBER_MIN=240; // 4h
 
-    function auth_ok_until(){ const v=localStorage.getItem('auth_ok_until'); return v?parseInt(v,10):0; }
-    function set_auth_ok(){ localStorage.setItem('auth_ok_until', String(Date.now()+REMEMBER_MIN*60*1000)); }
+    const auth_ok_until = ()=> parseInt(localStorage.getItem('auth_ok_until')||'0',10);
+    const set_auth_ok   = ()=> localStorage.setItem('auth_ok_until', String(Date.now()+REMEMBER_MIN*60*1000));
     function doLogin(){
       const u=qs('#authUser')?.value?.trim()||'', p=qs('#authPass')?.value||'', err=qs('#authErr');
       if(u===AUTH_USER && p===AUTH_PASS){ set_auth_ok(); qs('#authOverlay').style.display='none'; return true; }
       err?.classList.remove('hidden'); setTimeout(()=>err?.classList.add('hidden'),1500); return false;
     }
 
-    /* ===== Firebase: SUA CONFIG ===== */
+    /* ========= Firebase ========= */
     const FIREBASE = {
       apiKey: "AIzaSyDadspZB30sQOgZr7PTcSbub1ZJB80Kui4",
       authDomain: "dashboarddronepmesp.firebaseapp.com",
@@ -57,26 +59,45 @@
       appId: "1:769998411213:web:f0ecce2126f0af9b4a2084",
       measurementId: "G-4TVLS703CF"
     };
-    const DB_PATH='dashboards/main'; // caminho único
+    const DB_PATH='dashboards/main';
 
     firebase.initializeApp(FIREBASE);
     const db=firebase.database();
     const dbRef=db.ref(DB_PATH);
 
-    /* ===== Estado & Params ===== */
+    /* ========= Estado ========= */
     const params=new URLSearchParams(location.search);
     const MODE=(params.get('mode')||'edit').toLowerCase();
     const isView = MODE==='view';
     let COLS=parseInt(params.get('cols')||'2',10);
-    let VIEW_COLS_OVERRIDE=null; // seleção local do visualizador
+    let VIEW_COLS_OVERRIDE=null;
+
     let VIDEO_IDS=[], LABELS=[], LOCS=[];
     let YT_READY=false;
+    const players = new Map(); // id -> YT.Player
 
-    /* ===== Utils ===== */
+    /* ========= Utils ========= */
     const esc=s=>String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-    const idFromUrl=u=>{ try{ if(u.includes('watch?v=')) return u.split('v=')[1].split('&')[0]; if(u.includes('youtu.be/')) return u.split('youtu.be/')[1].split('?')[0]; }catch(_){} return u.trim(); }
+    // Extração ROBUSTA do ID (watch?v= | youtu.be | /live/ | /shorts/ | ID puro)
+    function getYouTubeId(input){
+      if(!input) return null;
+      const raw = String(input).trim();
+      if(/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
+      try{
+        const u = new URL(raw);
+        if(u.hostname.includes('youtu.be')){
+          const maybe=u.pathname.slice(1).split('/')[0];
+          if(/^[a-zA-Z0-9_-]{11}$/.test(maybe)) return maybe;
+        }
+        const v = u.searchParams.get('v');
+        if(v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+        const m = u.pathname.match(/\/(live|shorts)\/([a-zA-Z0-9_-]{11})/);
+        if(m) return m[2];
+      }catch(_){}
+      return null;
+    }
 
-    /* ===== Drag & Drop (editor) ===== */
+    /* ========= Drag & Drop ========= */
     let dragSrcIndex=null;
     function attachDnD(cardEl, index){
       if(isView) return;
@@ -94,20 +115,58 @@
         move(VIDEO_IDS,dragSrcIndex,targetIndex);
         move(LABELS,   dragSrcIndex,targetIndex);
         move(LOCS,     dragSrcIndex,targetIndex);
-        saveRealtime(); // salva ordem
-        renderGrid();  // re-render editor
+        saveRealtime();
+        renderGrid();
       });
     }
 
-    /* ===== YouTube ===== */
-    window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
+    /* ========= YouTube ========= */
+    window.onYouTubeIframeAPIReady = function(){
+      YT_READY=true;
+      renderGrid();
+    };
+
+    function buildPlayer(i, id){
+      // se já existir para este ID, destrói antes
+      if(players.has(id)){
+        try{ players.get(id).destroy(); }catch(_){}
+        players.delete(id);
+      }
+      const p = new YT.Player(`yt_${i}`, {
+        videoId: id,
+        width: '100%', height: '100%',
+        playerVars:{autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1},
+        events:{
+          onReady: e => { try{ e.target.mute(); e.target.playVideo(); }catch(_){} },
+          onStateChange: e => {
+            const st = e.data;
+            const card = document.getElementById(`card_${id}`);
+            if (!card) return;
+            const badge = card.querySelector('.live-badge');
+            if (st === YT.PlayerState.PLAYING) {
+              badge.textContent = 'AO VIVO';
+              badge.classList.remove('bg-gray-500');
+              badge.classList.add('bg-red-600');
+            } else if (st === YT.PlayerState.UNSTARTED || st === YT.PlayerState.BUFFERING) {
+              badge.textContent = 'AGUARDANDO SINAL';
+              badge.classList.remove('bg-red-600');
+              badge.classList.add('bg-gray-500');
+            } else if (st === YT.PlayerState.ENDED || st === YT.PlayerState.PAUSED) {
+              badge.textContent = 'OFFLINE';
+              badge.classList.remove('bg-red-600');
+              badge.classList.add('bg-gray-700');
+            }
+          }
+        }
+      });
+      players.set(id, p);
+    }
 
     function applyGridCols(){
       const cols = (isView && VIEW_COLS_OVERRIDE!=null) ? VIEW_COLS_OVERRIDE : COLS;
       const grid=qs('#gridContainer');
       if(grid) grid.style.gridTemplateColumns=`repeat(${cols}, 1fr)`;
-      const layout=qs('#layout');
-      if(layout) layout.value=String(cols);
+      qs('#layout') && (qs('#layout').value=String(cols));
     }
 
     function renderGrid(){
@@ -119,63 +178,65 @@
       if(LOCS.length<VIDEO_IDS.length){   for(let i=LOCS.length;i<VIDEO_IDS.length;i++)   LOCS[i]=''; }
 
       if(!VIDEO_IDS.length){
-        grid.innerHTML=isView?'Aguardando configuração do operador.':'Clique em <b>Inserir Equipe</b> ou use o botão <b>Inserir Equipe</b> no topo.';
+        grid.innerHTML=isView
+          ? '<div class="text-gray-400">Aguardando configuração do operador.</div>'
+          : 'Clique em <b>Inserir Equipe</b> para começar.';
         return;
       }
 
       VIDEO_IDS.forEach((id,i)=>{
-        const card=document.createElement('div'); card.className='video-card'; card.dataset.idx=i; card.id=`card_${id}`;
+        const safeId = getYouTubeId(id) || id; // compatibilidade com dados antigos
+        const card=document.createElement('div'); card.className='video-card'; card.dataset.idx=i; card.id=`card_${safeId}`;
         card.innerHTML=
-          `<div class="video-box">
-             <div id="yt_${i}" class="player-fill"></div>
-             <div class="absolute top-2 left-2 px-2 py-1 rounded text-[10px] badge-live flex items-center gap-1">
-               <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span> AO VIVO
-             </div>
-             <div class="absolute top-2 right-2 flex gap-2">
-               <button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(id)}','_blank')">Tela cheia</button>
-               ${isView ? '' : `<button class="tile-btn" onclick="(function(){
-                   if(!confirm('Remover esta equipe?')) return;
-                   const idx=${i};
-                   VIDEO_IDS.splice(idx,1);
-                   LABELS.splice(idx,1);
-                   LOCS.splice(idx,1);
-                   saveRealtime();
-                   renderGrid();
-                 })()">Remover</button>`}
-             </div>
+        `<div class="video-box">
+           <div id="yt_${i}" class="player-fill"></div>
+           <div class="absolute top-2 left-2 px-2 py-1 rounded text-[10px] live-badge flex items-center gap-1 bg-gray-500">
+             <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+             <span>AGUARDANDO SINAL</span>
            </div>
-           <div class="px-2 pt-1 pb-0 bg-gray-800/70">
-             <h3 class="font-medium text-sm">${esc(LABELS[i]||'Equipe '+(i+1))}</h3>
-             <p class="text-gray-400 text-[11px]">${esc(LOCS[i]||'')}</p>
-           </div>`;
+           <div class="absolute top-2 right-2 flex gap-2">
+             <button class="tile-btn" onclick="window.open('https://www.youtube.com/watch?v=${encodeURIComponent(safeId)}','_blank')">Tela cheia</button>
+             ${isView ? '' : `<button class="tile-btn" onclick="(function(){
+               if(!confirm('Remover esta equipe?')) return;
+               const idx=${i};
+               VIDEO_IDS.splice(idx,1);
+               LABELS.splice(idx,1);
+               LOCS.splice(idx,1);
+               saveRealtime();
+               renderGrid();
+             })()">Remover</button>`}
+           </div>
+         </div>
+         <div class="px-2 pt-1 pb-0 bg-gray-800/70">
+           <h3 class="font-medium text-sm">${esc(LABELS[i]||'Equipe '+(i+1))}</h3>
+           <p class="text-gray-400 text-[11px]">${esc(LOCS[i]||'')}</p>
+         </div>`;
         grid.appendChild(card);
         attachDnD(card,i);
 
         if(YT_READY){
-          new YT.Player(`yt_${i}`,{
-            videoId:id, width:'100%', height:'100%',
-            playerVars:{autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1},
-            events:{ onReady:e=>{ try{e.target.mute(); e.target.playVideo();}catch(_){ } } }
-          });
+          buildPlayer(i, safeId);
         }
       });
     }
 
-    /* ===== Realtime ===== */
+    /* ========= Realtime ========= */
     function saveRealtime(){
       dbRef.set({ ids:VIDEO_IDS, labels:LABELS, locs:LOCS, cols:COLS, ts:Date.now() });
     }
     function subscribeRealtime(){
       dbRef.on('value', snap=>{
         const j=snap.val(); if(!j) return;
-        const newIds=j.ids||[], newLabels=j.labels||[], newLocs=j.locs||[];
+        const newIds=(j.ids||[]).map(getYouTubeId).filter(Boolean);
+        const newLabels=j.labels||[];
+        const newLocs=j.locs||[];
         COLS = parseInt(j.cols||COLS||2,10);
 
         const sameSet = newIds.length===VIDEO_IDS.length &&
                         [...newIds].sort().join(',') === [...VIDEO_IDS].sort().join(',');
 
         if(sameSet && YT_READY){
-          // reordena DOM sem recriar players
+          // Reordena DOM sem recriar players
           const grid=qs('#gridContainer');
           newIds.forEach(id=>{
             const el=document.getElementById(`card_${id}`);
@@ -183,7 +244,7 @@
           });
           VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
 
-          // atualiza textos
+          // Atualiza textos
           newIds.forEach((id,idx)=>{
             const card=document.getElementById(`card_${id}`);
             if(card){
@@ -193,7 +254,6 @@
             }
           });
 
-          // aplica colunas (respeitando override do viewer)
           applyGridCols();
         } else {
           VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
@@ -202,14 +262,14 @@
       });
     }
 
-    /* ===== UI Init ===== */
+    /* ========= UI ========= */
     document.addEventListener('DOMContentLoaded', ()=>{
       // Mostrar/ocultar botões conforme modo
       qs('#btnShare')?.classList.toggle('hidden', isView);
       qs('#btnConfig')?.classList.toggle('hidden', isView);
       qs('#btnClearAll')?.classList.toggle('hidden', isView);
 
-      // login só no editor
+      // Login somente no editor
       if(!isView){
         if(auth_ok_until()<=Date.now()){
           qs('#authOverlay').style.display='flex';
@@ -222,15 +282,13 @@
       // Cabeçalho
       qs('#btnFullscreen')?.addEventListener('click',()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); });
 
-      // Layout select:
+      // Layout select
       qs('#layout')?.addEventListener('change', ()=>{
         const val = parseInt(qs('#layout').value,10)||2;
         if(isView){
-          // apenas local (override), sem salvar no Firebase
           VIEW_COLS_OVERRIDE = val;
           applyGridCols();
         } else {
-          // editor: salva no Firebase
           COLS = val;
           saveRealtime();
           applyGridCols();
@@ -244,14 +302,15 @@
         const loc=qs('#teamLocation').value.trim();
         const url=qs('#youtubeUrl').value.trim();
         if(!name||!url){ alert('Preencha Nome e URL'); return; }
-        const id=idFromUrl(url);
+        const id=getYouTubeId(url);
+        if(!id){ alert('URL/ID do YouTube inválido.'); return; }
         VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc);
         saveRealtime();
         renderGrid();
         qs('#configModal').classList.add('hidden'); qs('#teamForm').reset();
       });
 
-      // Share link (editor)
+      // Link do visualizador
       qs('#btnShare')?.addEventListener('click', ()=>{
         const base=location.origin+location.pathname;
         const url=new URL(base);
@@ -261,25 +320,24 @@
         navigator.clipboard.writeText(url.toString()).then(()=>alert('Link do VISUALIZADOR copiado:\n\n'+url.toString()));
       });
 
-      // Limpar tudo (editor)
+      // Limpar tudo
       qs('#btnClearAll')?.addEventListener('click', ()=>{
         if(!confirm('Apagar TODAS as equipes do dashboard?')) return;
+        // Destrói players atuais
+        players.forEach(p=>{ try{p.destroy();}catch(_){}}); players.clear();
         VIDEO_IDS=[]; LABELS=[]; LOCS=[];
         saveRealtime();
         renderGrid();
       });
 
-      // Start RT e primeira render
       subscribeRealtime();
     });
-
-    window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
   })();
   </script>
 </head>
 <body class="min-h-screen">
 
-  <!-- Overlay de Login (só editor) -->
+  <!-- Overlay de Login (somente editor) -->
   <div id="authOverlay" class="fixed inset-0 z-[1000] hidden items-center justify-center bg-black/70">
     <div class="bg-gray-800 text-white w-full max-w-sm rounded-xl shadow-xl p-6">
       <h2 class="text-lg font-semibold mb-4">Acesso restrito</h2>
@@ -333,7 +391,7 @@
     <div id="gridContainer" class="grid-container"></div>
   </main>
 
-  <!-- Modal Inserir -->
+  <!-- Modal Inserir Equipe -->
   <div id="configModal" class="fixed inset-0 bg-black/60 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -348,8 +406,8 @@
             <input id="teamLocation" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="Rua / Bairro / Ponto de referência">
           </div>
           <div>
-            <label class="block text-sm mb-1">URL do YouTube</label>
-            <input id="youtubeUrl" type="url" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="https://www.youtube.com/watch?v=abc123">
+            <label class="block text-sm mb-1">URL do YouTube (ou ID)</label>
+            <input id="youtubeUrl" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="https://youtube.com/live/XXXXXXXXXXX ou ID de 11 caracteres">
           </div>
           <div class="flex gap-3 pt-2">
             <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>

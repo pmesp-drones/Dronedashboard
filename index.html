@@ -6,405 +6,276 @@
   <title>Dashboard Programa de Policiamento com Drones</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root { --card:#111827; }
-    body { background:#111827; color:white; box-sizing:border-box; }
-    .grid-container { display:grid; gap:1rem; grid-template-columns:repeat(2,1fr); }
-    @media (min-width:1280px){ .grid-container{ grid-template-columns:repeat(3,1fr);} }
-    @media (max-width:1024px){ .grid-container{ grid-template-columns:repeat(2,1fr);} }
-    @media (max-width:640px){  .grid-container{ grid-template-columns:1fr;} }
-    .video-card{ background:#1f2937; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
-    .card-header{ padding:.75rem 1rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem; background:#0b1220; }
-    .card-footer{ padding:.5rem 1rem; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; border-top:1px solid #334155 }
-    .badge{ font-size:.75rem; background:#0ea5e9; color:#0b1220; padding:.15rem .5rem; border-radius:999px; }
-    .btn{ background:#2563eb; padding:.5rem .75rem; border-radius:.5rem; }
-    .btn:hover{ background:#1d4ed8; }
-    .btn-danger{ background:#dc2626; }
-    .btn-danger:hover{ background:#b91c1c; }
-    .muted-icon{ font-size:.75rem; opacity:.8 }
-    .hidden-when-viewer[hidden]{ display:none !important; }
-    select, input[type="text"]{ color:#0b1220 }
-    .toolbar{ position:sticky; top:0; z-index:40; background:#0b1220; border-bottom:1px solid #334155 }
+    body {
+      background: #111827;
+      color: white;
+      box-sizing: border-box;
+      font-family: sans-serif;
+    }
+    .grid-container {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    @media (min-width: 1280px) {
+      .grid-container { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 1024px) {
+      .grid-container { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .grid-container { grid-template-columns: 1fr; }
+    }
+    .video-card {
+      background: #1f2937;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-header {
+      padding: .75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+      background: #0b1220;
+    }
+    .card-footer {
+      padding: .5rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: .5rem;
+      border-top: 1px solid #334155;
+      background: rgba(0,0,0,0.15);
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: #0b1220;
+      border-bottom: 1px solid #334155;
+    }
+    .badge {
+      font-size: .75rem;
+      background: #0ea5e9;
+      color: #0b1220;
+      padding: .15rem .5rem;
+      border-radius: 999px;
+    }
+    select, input[type="text"] {
+      color: #0b1220;
+    }
   </style>
-  <!-- YouTube IFrame API -->
   <script>
-    (function(){
-      const tag = document.createElement('script');
+    (function() {
+      const tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
       document.head.appendChild(tag);
     })();
   </script>
 </head>
+
 <body>
-  <!-- Toolbar -->
+  <!-- Barra superior -->
   <div class="toolbar">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-      <h1 class="text-xl font-semibold">Dashboard Programa de Policiamento com Drones</h1>
-      <span class="badge">v9-rt-plus-viewcols+clear</span>
+      <img src="https://upload.wikimedia.org/wikipedia/commons/3/3a/Bras%C3%A3o_da_Pol%C3%ADcia_Militar_do_Estado_de_S%C3%A3o_Paulo.svg"
+           alt="PMESP" class="h-8 w-auto">
+      <div>
+        <h1 class="text-xl font-semibold">Dashboard Programa de Policiamento com Drones</h1>
+        <p class="text-sm opacity-70">Monitoramento em Tempo Real • Firebase RT</p>
+      </div>
       <div class="ml-auto flex flex-wrap items-center gap-2">
         <label class="text-sm opacity-80">Modo:</label>
         <select id="modeSelect" class="rounded px-2 py-1 text-black">
           <option value="viewer">Visualizador</option>
           <option value="editor">Editor</option>
         </select>
-
-        <label class="text-sm opacity-80">Qualidade padrão:</label>
-        <select id="globalQuality" class="rounded px-2 py-1 text-black">
-          <option value="tiny">144p</option>
-          <option value="small">240p</option>
-          <option value="medium">360p</option>
-          <option value="large">480p</option>
-          <option value="hd720">720p</option>
-          <option value="hd1080">1080p</option>
-          <option value="highres">Máx.</option>
-        </select>
-        <button id="applyAllBtn" class="btn">Aplicar a todas</button>
       </div>
     </div>
   </div>
 
   <!-- Editor -->
-  <div id="editorPanel" class="max-w-7xl mx-auto px-4 py-4 hidden-when-viewer" hidden>
+  <div id="editorPanel" class="max-w-7xl mx-auto px-4 py-4" hidden>
     <div class="bg-slate-800 rounded-xl p-4">
       <h2 class="text-lg font-semibold mb-3">Gerenciar Lives</h2>
       <div class="flex flex-col md:flex-row gap-2">
-        <input id="liveInput" type="text" class="rounded px-3 py-2 w-full" placeholder="Cole a URL do YouTube ou ID da live (ex: https://www.youtube.com/live/XXXX ou VIDEO_ID)" />
+        <input id="liveInput" type="text" class="rounded px-3 py-2 w-full" placeholder="Cole a URL do YouTube ou ID da live" />
         <input id="labelInput" type="text" class="rounded px-3 py-2 w-full md:w-64" placeholder="Rótulo (opcional), ex: Drone 01" />
-        <button id="addBtn" class="btn">Adicionar</button>
-        <button id="clearBtn" class="btn btn-danger">Limpar tudo</button>
+        <button id="addBtn" class="bg-blue-600 hover:bg-blue-500 rounded px-3 py-2">Adicionar</button>
+        <button id="clearBtn" class="bg-red-600 hover:bg-red-500 rounded px-3 py-2">Limpar tudo</button>
       </div>
-      <p class="text-sm mt-2 opacity-80">As lives são salvas no seu navegador (localStorage). Você pode alternar para o modo Visualizador e tudo permanece igual.</p>
     </div>
   </div>
 
-  <!-- Grid de vídeos -->
+  <!-- Grid -->
   <div class="max-w-7xl mx-auto px-4 py-4">
     <div id="grid" class="grid-container"></div>
   </div>
 
   <script>
-    // ---------- Armazenamento ----------
-    const STORAGE_KEY = 'droneLivesV2';
-    const QUALITY_KEY = 'defaultQualityV2';         // qualidade padrão do dashboard
-    const DEFAULT_QUALITY = 'tiny';                 // 144p padrão (persistente)
+    const STORAGE_KEY = "droneLives";
+    const DEFAULT_QUALITY = "tiny"; // 144p
 
-    if (!localStorage.getItem(QUALITY_KEY)) {
-      localStorage.setItem(QUALITY_KEY, DEFAULT_QUALITY);
-    }
-
-    // ---------- Estado ----------
-    let players = {}; // playerDivId -> YT.Player
-    let lives = loadLives();
+    let players = {};
+    let lives = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     let ytReady = false;
 
-    function loadLives(){
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw){ return JSON.parse(raw); }
-      }catch(e){}
-      return [];
+    function saveLives() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(lives));
     }
-    function saveLives(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(lives)); }
-    function getDefaultQuality(){ return localStorage.getItem(QUALITY_KEY) || DEFAULT_QUALITY; }
-    function setDefaultQuality(q){ localStorage.setItem(QUALITY_KEY, q); }
 
-    // ---------- Util ----------
-    function extractVideoId(input){
-      if (!input) return null;
-      try{
-        if (/^[-_a-zA-Z0-9]{11}$/.test(input)) return input; // id clássico
-        const u = new URL(input);
-        if (u.hostname.includes('youtube.com')){
-          if (u.pathname.startsWith('/live/')) return u.pathname.split('/live/')[1].split(/[?&]/)[0];
-          if (u.pathname.startsWith('/watch')) return u.searchParams.get('v');
-          if (u.pathname.startsWith('/shorts/')) return u.pathname.split('/shorts/')[1].split(/[?&]/)[0];
-          if (u.pathname.startsWith('/embed/'))  return u.pathname.split('/embed/')[1].split(/[?&]/)[0];
+    function extractVideoId(url) {
+      if (!url) return null;
+      try {
+        if (/^[-_a-zA-Z0-9]{11}$/.test(url)) return url;
+        const u = new URL(url);
+        if (u.hostname.includes("youtube.com")) {
+          if (u.pathname.startsWith("/live/")) return u.pathname.split("/live/")[1];
+          if (u.pathname.startsWith("/watch")) return u.searchParams.get("v");
         }
-        if (u.hostname === 'youtu.be'){
-          return u.pathname.slice(1).split(/[?&]/)[0];
-        }
-      }catch(e){
-        return input; // pode ser ID diferente (lives longas)
+        if (u.hostname === "youtu.be") return u.pathname.substring(1);
+      } catch {
+        return url;
       }
-      return null;
     }
 
-    function humanQualityLabel(q){
-      const map = {
-        tiny: '144p', small: '240p', medium: '360p', large: '480p',
-        hd720: '720p', hd1080: '1080p', highres: 'Máx.'
-      };
-      return map[q] || q;
-    }
-
-    // pega o melhor nível disponível dado um pedido (ex.: se 144p não existir)
-    function pickAvailableQuality(requested, available){
-      // ordem de baixo para cima (economia de banda)
-      const order = ['tiny','small','medium','large','hd720','hd1080','highres'];
-      const set = new Set(available || []);
-      if (set.has(requested)) return requested;
-      // tenta o mesmo ou o imediatamente abaixo
-      for (let i = 0; i < order.length; i++){
-        if (order[i] === requested){
-          // varre pra baixo
-          for (let j = i; j >= 0; j--){
-            if (set.has(order[j])) return order[j];
-          }
-          // se nada pra baixo, pega o menor disponível
-          for (let o of order){ if (set.has(o)) return o; }
-        }
-      }
-      // fallback: mantém pedido
-      return requested;
-    }
-
-    // reforça qualidade por alguns ciclos (YT às vezes ignora de 1ª)
-    function enforceQuality(player, desiredQ, cycles = 6, intervalMs = 500){
-      let count = 0;
-      const iv = setInterval(()=>{
-        try{
-          const avail = player.getAvailableQualityLevels ? player.getAvailableQualityLevels() : [];
-          const q = pickAvailableQuality(desiredQ, avail);
-          player.setPlaybackQuality && player.setPlaybackQuality(q);
-        }catch(_){}
-        count++;
-        if (count >= cycles) clearInterval(iv);
-      }, intervalMs);
-    }
-
-    // ---------- Render ----------
-    function render(){
-      const grid = document.getElementById('grid');
-      grid.innerHTML = '';
-      players = {};
-
-      lives.forEach((live, idx) => {
+    function render() {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      lives.forEach((live, i) => {
         const vid = extractVideoId(live.id);
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.dataset.idx = idx;
+        const card = document.createElement("div");
+        card.className = "video-card";
 
-        // header
-        const header = document.createElement('div');
-        header.className = 'card-header';
+        const header = document.createElement("div");
+        header.className = "card-header";
         header.innerHTML = `
           <div class="flex items-center gap-2">
-            <span class="font-semibold">${live.label || 'Sem rótulo'}</span>
-            <span class="muted-icon">(auto-mute)</span>
+            <span class="font-semibold">${live.label || "Sem nome"}</span>
           </div>
-          <div class="flex items-center gap-2 hidden-when-viewer" ${isEditor() ? '' : 'hidden'}>
-            <button class="btn btn-danger" data-action="remove">Remover</button>
-          </div>
+          <button class="bg-red-600 hover:bg-red-500 rounded px-3 py-1 hidden" data-remove>Remover</button>
         `;
         card.appendChild(header);
 
-        // player box
-        const playerBox = document.createElement('div');
-        playerBox.style.position = 'relative';
-        playerBox.style.aspectRatio = '16 / 9';
-        const playerDivId = `player_${idx}_${Date.now()}`;
-        playerBox.innerHTML = `<div id="${playerDivId}" style="width:100%; height:100%;"></div>`;
-        card.appendChild(playerBox);
+        const playerDiv = document.createElement("div");
+        const playerId = `player_${i}_${Date.now()}`;
+        playerDiv.id = playerId;
+        playerDiv.style.aspectRatio = "16/9";
+        card.appendChild(playerDiv);
 
-        // footer (seletor por live)
-        const footer = document.createElement('div');
-        footer.className = 'card-footer';
-
-        const lbl = document.createElement('span');
-        lbl.className = 'text-sm opacity-80';
-        lbl.textContent = 'Resolução:';
-
-        const qualitySelect = document.createElement('select');
-        qualitySelect.className = 'rounded px-2 py-1 text-black';
-        ['tiny','small','medium','large','hd720','hd1080','highres'].forEach(q=>{
-          const opt = document.createElement('option');
-          opt.value = q;
-          opt.textContent = humanQualityLabel(q);
-          qualitySelect.appendChild(opt);
-        });
-
-        // valor inicial (por live ou default)
-        qualitySelect.value = (live.quality || getDefaultQuality());
-
-        // mudança: salva e aplica no player
-        qualitySelect.addEventListener('change', ()=>{
-          live.quality = qualitySelect.value;
-          saveLives();
-          const p = players[playerDivId];
-          if (p){
-            const avail = p.getAvailableQualityLevels ? p.getAvailableQualityLevels() : [];
-            const q = pickAvailableQuality(live.quality, avail);
-            try{
-              p.setPlaybackQuality && p.setPlaybackQuality(q);
-              // reforça logo após
-              enforceQuality(p, q, 6, 400);
-            }catch(_){}
-          }
-        });
-
-        footer.appendChild(lbl);
-        footer.appendChild(qualitySelect);
+        // Seletor de qualidade
+        const footer = document.createElement("div");
+        footer.className = "card-footer";
+        footer.innerHTML = `
+          <label>Resolução:</label>
+          <select class="rounded px-2 py-1 text-black">
+            <option value="tiny">144p</option>
+            <option value="small">240p</option>
+            <option value="medium">360p</option>
+            <option value="large">480p</option>
+            <option value="hd720">720p</option>
+            <option value="hd1080">1080p</option>
+          </select>
+        `;
         card.appendChild(footer);
-
-        // eventos de remover
-        header.querySelectorAll('[data-action="remove"]').forEach(btn=>{
-          btn.addEventListener('click', ()=>{
-            lives.splice(idx,1);
-            saveLives();
-            render();
-          });
-        });
-
         grid.appendChild(card);
 
-        // cria player quando API pronta
-        createPlayerWhenReady(playerDivId, vid, live, qualitySelect);
+        const select = footer.querySelector("select");
+        select.value = live.quality || DEFAULT_QUALITY;
+
+        select.addEventListener("change", () => {
+          live.quality = select.value;
+          saveLives();
+          const p = players[playerId];
+          if (p) applyQuality(p, select.value);
+        });
+
+        header.querySelector("[data-remove]").addEventListener("click", () => {
+          lives.splice(i, 1);
+          saveLives();
+          render();
+        });
+
+        createPlayer(playerId, vid, live, select);
       });
     }
 
-    function createPlayerWhenReady(divId, videoId, live, selectEl){
-      if (ytReady){
-        makePlayer(divId, videoId, live, selectEl);
-      } else {
-        const iv = setInterval(()=>{
-          if (ytReady){
-            clearInterval(iv);
-            makePlayer(divId, videoId, live, selectEl);
-          }
-        }, 150);
-      }
+    function applyQuality(player, q) {
+      if (!player) return;
+      let tries = 0;
+      const interval = setInterval(() => {
+        try {
+          player.setPlaybackQuality && player.setPlaybackQuality(q);
+        } catch {}
+        tries++;
+        if (tries > 8) clearInterval(interval);
+      }, 400);
     }
 
-    function makePlayer(divId, videoId, live, selectEl){
-      try{
-        const p = new YT.Player(divId, {
-          videoId: videoId,
-          playerVars: {
-            autoplay: 1,
-            mute: 1,
-            playsinline: 1,
-            controls: 0,
-            rel: 0
+    function createPlayer(id, videoId, live, select) {
+      if (!ytReady) {
+        const interval = setInterval(() => {
+          if (ytReady) {
+            clearInterval(interval);
+            createPlayer(id, videoId, live, select);
+          }
+        }, 200);
+        return;
+      }
+
+      players[id] = new YT.Player(id, {
+        videoId: videoId,
+        playerVars: { autoplay: 1, mute: 1, playsinline: 1, controls: 0 },
+        events: {
+          onReady: (e) => {
+            const q = live.quality || DEFAULT_QUALITY;
+            applyQuality(e.target, q);
           },
-          events: {
-            onReady: (e)=>{
-              players[divId] = e.target;
-              const desired = live.quality || getDefaultQuality();
-
-              // tenta aplicar o melhor nível disponível para a live
-              const avail = e.target.getAvailableQualityLevels ? e.target.getAvailableQualityLevels() : [];
-              const q = pickAvailableQuality(desired, avail);
-              // atualiza o select (pode cair para 240p etc. se 144p não existir)
-              selectEl.value = q;
-              live.quality = q;
-              saveLives();
-
-              try { e.target.playVideo(); } catch(_){}
-              try { e.target.setPlaybackQuality && e.target.setPlaybackQuality(q); } catch(_){}
-              // reforça durante ~3s
-              enforceQuality(e.target, q, 6, 500);
-            },
-            onStateChange: (e)=>{
-              if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING){
-                const desired = live.quality || getDefaultQuality();
-                const avail = e.target.getAvailableQualityLevels ? e.target.getAvailableQualityLevels() : [];
-                const q = pickAvailableQuality(desired, avail);
-                try { e.target.setPlaybackQuality && e.target.setPlaybackQuality(q); } catch(_){}
-              }
+          onStateChange: (e) => {
+            if (e.data === YT.PlayerState.PLAYING) {
+              const q = live.quality || DEFAULT_QUALITY;
+              applyQuality(e.target, q);
             }
-          }
-        });
-      }catch(err){
-        console.warn('Erro criando player', err);
-      }
+          },
+        },
+      });
     }
 
-    // Chamado pela API do YouTube
-    window.onYouTubeIframeAPIReady = function(){
+    window.onYouTubeIframeAPIReady = () => {
       ytReady = true;
       render();
     };
 
-    // ---------- Modo ----------
-    function isEditor(){
-      return (document.getElementById('modeSelect').value === 'editor');
-    }
-    function applyMode(){
-      const panel = document.getElementById('editorPanel');
-      const viewerHidden = !isEditor();
-      panel.hidden = viewerHidden;
-      document.querySelectorAll('.hidden-when-viewer').forEach(el=>{
-        if (el.closest('#editorPanel')) return;
-        if (viewerHidden) el.setAttribute('hidden','');
-        else el.removeAttribute('hidden');
-      });
-    }
-    document.getElementById('modeSelect').addEventListener('change', applyMode);
-
-    (function initModeFromQuery(){
-      const qs = new URLSearchParams(location.search);
-      const m = qs.get('mode');
-      if (m === 'editor' || m === 'viewer'){
-        document.getElementById('modeSelect').value = m;
-      }
-      applyMode();
-    })();
-
-    // ---------- Controles Globais ----------
-    const globalQualitySelect = document.getElementById('globalQuality');
-    globalQualitySelect.value = getDefaultQuality();
-
-    globalQualitySelect.addEventListener('change', ()=>{
-      setDefaultQuality(globalQualitySelect.value);
-    });
-
-    document.getElementById('applyAllBtn').addEventListener('click', ()=>{
-      const q = globalQualitySelect.value;
-      setDefaultQuality(q);
-      lives = lives.map(l => ({...l, quality: q}));
-      saveLives();
-
-      // aplica nos players atuais com fallback para níveis disponíveis
-      Object.values(players).forEach(p=>{
-        const avail = p.getAvailableQualityLevels ? p.getAvailableQualityLevels() : [];
-        const best = pickAvailableQuality(q, avail);
-        try {
-          p.setPlaybackQuality && p.setPlaybackQuality(best);
-          enforceQuality(p, best, 6, 400);
-        }catch(_){}
-      });
-
-      // atualiza selects individuais
-      document.querySelectorAll('.card-footer select').forEach(sel=>{
-        sel.value = q;
-      });
-    });
-
-    // ---------- Editor: adicionar/limpar ----------
-    document.getElementById('addBtn').addEventListener('click', ()=>{
-      const input = document.getElementById('liveInput');
-      const label = document.getElementById('labelInput');
+    document.getElementById("addBtn").onclick = () => {
+      const input = document.getElementById("liveInput");
+      const label = document.getElementById("labelInput");
       const vid = extractVideoId(input.value.trim());
-      if (!vid){
-        alert('Não consegui identificar o ID/URL do YouTube.');
-        return;
-      }
-      lives.push({ id: vid, label: label.value.trim() || '', quality: getDefaultQuality() });
+      if (!vid) return alert("ID inválido.");
+      lives.push({ id: vid, label: label.value.trim() || "", quality: DEFAULT_QUALITY });
       saveLives();
-      input.value = '';
-      label.value = '';
+      input.value = "";
+      label.value = "";
       render();
-    });
+    };
 
-    document.getElementById('clearBtn').addEventListener('click', ()=>{
-      if (confirm('Tem certeza que deseja limpar todas as lives salvas?')){
+    document.getElementById("clearBtn").onclick = () => {
+      if (confirm("Limpar todas as lives?")) {
         lives = [];
         saveLives();
         render();
       }
-    });
+    };
 
-    // ---------- Failsafe ----------
-    setTimeout(()=>{ if (!ytReady) render(); }, 2000);
+    document.getElementById("modeSelect").onchange = () => {
+      const isEditor = document.getElementById("modeSelect").value === "editor";
+      document.getElementById("editorPanel").hidden = !isEditor;
+      document.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.hidden = !isEditor;
+      });
+    };
   </script>
 </body>
 </html>

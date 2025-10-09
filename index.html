@@ -1,10 +1,10 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v9-rt-plus-viewcols+clear -->
+  <!-- build: v11-offline+playlist+btnfix2 -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
@@ -22,11 +22,15 @@
     .drag-over{ outline:2px dashed #60a5fa; outline-offset:-6px; }
     .hidden { display:none!important; }
 
+    /* OFFLINE overlay */
+    .offline-overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:1rem; background:linear-gradient(180deg, rgba(17,24,39,0.2), rgba(17,24,39,0.85)); backdrop-filter: blur(2px); }
+    .offline-badge{ display:inline-flex; align-items:center; gap:.5rem; padding:.5rem .75rem; border:1px solid rgba(255,255,255,.2); border-radius:.5rem; font-size:.85rem; color:#e5e7eb; }
+
     /* ===== QUALIDADE (ícone + menu) ===== */
     .q-wrap{ position:absolute; right:.5rem; bottom:.5rem; display:flex; align-items:center; gap:.4rem; }
-    .q-btn{ display:flex; align-items:center; gap:.35rem; font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.15); border-radius:8px; background:rgba(0,0,0,.45); backdrop-filter:blur(2px); }
+    .q-btn{ display:flex; align-items:center; gap:.35rem; font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.15); border-radius:8px; background:rgba(0,0,0,.45); backdrop-filter:blur(2px); cursor:pointer; }
     .q-btn:hover{ background:rgba(255,255,255,.08); }
-    .q-menu{ position:absolute; right:0; bottom:2.2rem; background:#0b1220; border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:.35rem; display:none; z-index:20; }
+    .q-menu{ position:absolute; right:0; bottom:2.2rem; background:#0b1220; border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:.35rem; display:none; z-index:20; min-width:96px; }
     .q-item{ display:flex; align-items:center; gap:.45rem; padding:.35rem .5rem; border-radius:.45rem; font-size:12px; cursor:pointer; white-space:nowrap; }
     .q-item:hover{ background:rgba(255,255,255,.08); }
     .q-dot{ width:8px; height:8px; border-radius:999px; background:#60a5fa; opacity:.9; }
@@ -41,6 +45,7 @@
   <script>
   (function(){
     const qs=(s,e=document)=>e.querySelector(s);
+    const qsa=(s,e=document)=>Array.from(e.querySelectorAll(s));
 
     /* ===== Login universal (apenas Editor) ===== */
     const AUTH_USER='OPERACAOCPM';
@@ -66,7 +71,7 @@
       appId: "1:769998411213:web:f0ecce2126f0af9b4a2084",
       measurementId: "G-4TVLS703CF"
     };
-    const DB_PATH='dashboards/main'; // caminho único
+    const DB_PATH='dashboards/main';
 
     firebase.initializeApp(FIREBASE);
     const db=firebase.database();
@@ -79,11 +84,14 @@
     let COLS=parseInt(params.get('cols')||'2',10);
     let VIEW_COLS_OVERRIDE=null; // seleção local do visualizador
 
-    // IMPORTANTE: agora 'VIDEO_IDS' carrega PLAYLIST IDS
+    // Agora 'VIDEO_IDS' pode ser playlistId OU videoId
     let VIDEO_IDS=[], LABELS=[], LOCS=[];
     let YT_READY=false;
 
-    /* ===== Qualidade (padrão 144p e persistência por playlist) ===== */
+    // Mapa player por índice atual
+    const players = {};
+
+    /* ===== Qualidade (padrão 144p e persistência por playlist/vídeo) ===== */
     const DEFAULT_QUALITY='tiny'; // 144p
     const Q_KEY_PREFIX='liveQ_';
     const Q_ORDER=['tiny','small','medium','large','hd720','hd1080','highres'];
@@ -96,58 +104,60 @@
       const avail=new Set(available||[]);
       if (avail.has(requested)) return requested;
       const idx=Q_ORDER.indexOf(requested);
-      if (idx>=0){
-        for(let i=idx;i>=0;i--) if (avail.has(Q_ORDER[i])) return Q_ORDER[i];
-      }
+      if (idx>=0){ for(let i=idx;i>=0;i--) if (avail.has(Q_ORDER[i])) return Q_ORDER[i]; }
       for(const q of Q_ORDER) if (avail.has(q)) return q;
       return requested;
     }
-    function enforceQuality(player, desired, cycles=8, interval=450){
-      let n=0;
-      const iv=setInterval(()=>{
+    function enforceQuality(player, desired, cycles=10, interval=500){
+      let n=0; const iv=setInterval(()=>{
         try{
           const avail=player.getAvailableQualityLevels?player.getAvailableQualityLevels():[];
           const best=pickAvailableQuality(desired, avail);
-          player.setPlaybackQuality && player.setPlaybackQuality(best);
+          if (player.setPlaybackQuality) player.setPlaybackQuality(best);
         }catch(_){}
         if(++n>=cycles) clearInterval(iv);
       }, interval);
     }
 
     /* ===== Utils ===== */
-    const esc=s=>String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-    // Extrai PLAYLIST ID (list=) ou aceita ID cru
+    const esc=s=>String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[m]));
+    // Extrai PLAYLIST ID (list=), videoId (v=) ou short
     const idFromUrl=u=>{
       try{
         const url=new URL(u);
-        const listParam=url.searchParams.get('list');
-        if(listParam) return listParam;
-        // /playlist?list=... é coberto acima; se cair aqui e tiver 'list=' no texto:
-      }catch(_){}
-      if(typeof u==='string' && u.includes('list=')) return u.split('list=')[1].split('&')[0];
+        const list=url.searchParams.get('list');
+        if(list) return list; // playlist
+        const v=url.searchParams.get('v');
+        if(v) return v;       // video
+        if(url.hostname.includes('youtu.be')) return url.pathname.slice(1);
+      }catch(_){ /* string solta */ }
+      if(typeof u==='string'){
+        if(u.includes('list=')) return u.split('list=')[1].split('&')[0];
+        if(u.includes('watch?v=')) return u.split('v=')[1].split('&')[0];
+      }
       return (u||'').trim();
     };
+    const isPlaylistId=(id)=> typeof id==='string' && (id.startsWith('PL')||id.startsWith('UU')||id.startsWith('LL')||id.startsWith('OL')||id.length>12);
 
     /* ===== Drag & Drop (editor) ===== */
     let dragSrcIndex=null;
-    function attachDnD(cardEl, index){
+    function attachDnD(cardEl){
       if(isView) return;
       cardEl.setAttribute('draggable','true');
-      cardEl.addEventListener('dragstart', e=>{ dragSrcIndex=index; e.dataTransfer.effectAllowed='move'; cardEl.classList.add('opacity-80'); });
-      cardEl.addEventListener('dragend',   ()=>{ cardEl.classList.remove('opacity-80'); document.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over')); });
+      cardEl.addEventListener('dragstart', e=>{ dragSrcIndex=parseInt(cardEl.dataset.idx,10); e.dataTransfer.effectAllowed='move'; cardEl.classList.add('opacity-80'); });
+      cardEl.addEventListener('dragend',   ()=>{ dragSrcIndex=null; cardEl.classList.remove('opacity-80'); qsa('.drag-over').forEach(x=>x.classList.remove('drag-over')); });
       cardEl.addEventListener('dragover',  e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; cardEl.classList.add('drag-over'); });
       cardEl.addEventListener('dragleave', ()=>{ cardEl.classList.remove('drag-over'); });
       cardEl.addEventListener('drop',      e=>{
-        e.preventDefault();
-        cardEl.classList.remove('drag-over');
+        e.preventDefault(); cardEl.classList.remove('drag-over');
         const targetIndex=parseInt(cardEl.dataset.idx,10);
         if(dragSrcIndex===null || dragSrcIndex===targetIndex) return;
         const move=(arr,from,to)=>{ const x=arr.splice(from,1)[0]; arr.splice(to,0,x); };
         move(VIDEO_IDS,dragSrcIndex,targetIndex);
         move(LABELS,   dragSrcIndex,targetIndex);
         move(LOCS,     dragSrcIndex,targetIndex);
-        saveRealtime(); // salva ordem
-        renderGrid();  // re-render editor
+        saveRealtime();
+        renderGrid();
       });
     }
 
@@ -162,12 +172,10 @@
       if(layout) layout.value=String(cols);
     }
 
-    // cria o HTML do seletor (ícone engrenagem + menu)
     function qualityControlTemplate(currentLabel){
       return `
         <div class="q-wrap">
           <button type="button" class="q-btn" data-qbtn>
-            <!-- ícone engrenagem -->
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="opacity-90">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.89 3.31.877 2.42 2.42a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.89 1.543-.877 3.31-2.42 2.42a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.89-3.31-.877-2.42-2.42A1.724 1.724 0 004.317 13.65c-1.756-.426-1.756-2.924 0-3.35A1.724 1.724 0 005.383 7.73c-.89-1.543.877-3.31 2.42-2.42.99.57 2.232.04 2.522-.993z"/>
@@ -186,6 +194,49 @@
       `;
     }
 
+    // Delegação global para botões de card (remove, fullscreen, qualidade)
+    document.addEventListener('click', (ev)=>{
+      const rmBtn = ev.target.closest('[data-remove]');
+      if(rmBtn){
+        const card = ev.target.closest('.video-card');
+        if(!card) return;
+        const id = card.getAttribute('data-vid');
+        const idx = VIDEO_IDS.indexOf(id);
+        if(idx>-1 && !isView){
+          if(!confirm('Remover esta equipe?')) return;
+          VIDEO_IDS.splice(idx,1); LABELS.splice(idx,1); LOCS.splice(idx,1);
+          saveRealtime(); renderGrid();
+        }
+        return;
+      }
+      const qBtn = ev.target.closest('[data-qbtn]');
+      if(qBtn){
+        const menu = qBtn.parentElement.querySelector('[data-qmenu]');
+        const open = menu.style.display==='block';
+        qsa('.q-menu').forEach(m=> m.style.display='none');
+        menu.style.display = open ? 'none' : 'block';
+        ev.stopPropagation();
+        return;
+      }
+      const qItem = ev.target.closest('.q-item');
+      if(qItem){
+        const card = ev.target.closest('.video-card');
+        if(!card) return;
+        const id = card.getAttribute('data-vid');
+        const idx = parseInt(card.getAttribute('data-idx'),10);
+        const q  = qItem.getAttribute('data-q');
+        saveQ(id,q);
+        const player = players[idx];
+        try{ player && player.setPlaybackQuality && player.setPlaybackQuality(q); enforceQuality(player,q); }catch(_){}
+        const lbl = card.querySelector('[data-qlabel]'); if(lbl) lbl.textContent = Q_LABEL[q]||q;
+        const menu = card.querySelector('[data-qmenu]'); if(menu) menu.style.display='none';
+        return;
+      }
+      // Fechar menus de qualidade ao clicar fora
+      const clickedInsideQ = ev.target.closest('.q-wrap');
+      if(!clickedInsideQ){ qsa('.q-menu').forEach(m=> m.style.display='none'); }
+    });
+
     function renderGrid(){
       const grid=qs('#gridContainer');
       grid.innerHTML='';
@@ -195,13 +246,21 @@
       if(LOCS.length<VIDEO_IDS.length){   for(let i=LOCS.length;i<VIDEO_IDS.length;i++)   LOCS[i]=''; }
 
       if(!VIDEO_IDS.length){
-        grid.innerHTML=isView?'Aguardando configuração do operador.':'Clique em <b>Inserir Equipe</b> ou use o botão <b>Inserir Equipe</b> no topo.';
+        grid.innerHTML=isView?'Aguardando configuração do operador.':'Clique em <b>Inserir Equipe</b> no topo.';
         return;
       }
 
       VIDEO_IDS.forEach((id,i)=>{
         const savedQ = getSavedQ(id) || DEFAULT_QUALITY;
-        const card=document.createElement('div'); card.className='video-card'; card.dataset.idx=i; card.id=`card_${id}`;
+        const isPl=isPlaylistId(id);
+        const fullUrl = isPl ? `https://www.youtube.com/playlist?list=${encodeURIComponent(id)}` : `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+
+        const card=document.createElement('div');
+        card.className='video-card';
+        card.dataset.idx=String(i);
+        card.dataset.vid=id;
+        card.id=`card_${i}`; // índice para garantir unicidade
+
         card.innerHTML=
           `<div class="video-box">
              <div id="yt_${i}" class="player-fill"></div>
@@ -211,19 +270,17 @@
              </div>
 
              <div class="absolute top-2 right-2 flex gap-2">
-               <button class="tile-btn" onclick="window.open('https://www.youtube.com/playlist?list=${encodeURIComponent(id)}','_blank')">Tela cheia</button>
-               ${isView ? '' : `<button class="tile-btn" onclick="(function(){
-                   if(!confirm('Remover esta equipe?')) return;
-                   const idx=${i};
-                   VIDEO_IDS.splice(idx,1);
-                   LABELS.splice(idx,1);
-                   LOCS.splice(idx,1);
-                   saveRealtime();
-                   renderGrid();
-                 })()">Remover</button>`}
+               <button class="tile-btn" onclick="window.open('${fullUrl}','_blank')">Tela cheia</button>
+               ${isView ? '' : `<button class="tile-btn" data-remove>Remover</button>`}
              </div>
 
-             <!-- Qualidade: canto inferior direito -->
+             <div class="offline-overlay" id="off_${i}">
+               <div class="offline-badge">
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12H3"/></svg>
+                 <span>OFFLINE • aguardando sinal</span>
+               </div>
+             </div>
+
              ${qualityControlTemplate(Q_LABEL[savedQ])}
            </div>
 
@@ -233,106 +290,104 @@
            </div>`;
 
         grid.appendChild(card);
-        attachDnD(card,i);
+        attachDnD(card);
 
-        // Instancia player YouTube (AGORA VIA PLAYLIST)
         if(YT_READY){
-          const player = new YT.Player(`yt_${i}`,{
+          const playerConfig = {
             width:'100%', height:'100%',
-            playerVars:{
-              listType:'playlist', list:id,
-              autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1
-            },
-            events:{
-              onReady:e=>{
-                try{ e.target.mute(); e.target.playVideo(); }catch(_){}
-                const desired=getSavedQ(id) || DEFAULT_QUALITY;
-                const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
-                const best=pickAvailableQuality(desired, avail);
-                e.target.setPlaybackQuality && e.target.setPlaybackQuality(best);
-                enforceQuality(e.target, best);
-                // Sincroniza label no botão
-                const qLabel=card.querySelector('[data-qlabel]');
-                if(qLabel) qLabel.textContent=Q_LABEL[best]||best;
-                if(!getSavedQ(id)) saveQ(id, best);
-              },
-              onStateChange:e=>{
-                if (e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING){
-                  const desired=getSavedQ(id) || DEFAULT_QUALITY;
-                  const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
-                  const best=pickAvailableQuality(desired, avail);
-                  try{ e.target.setPlaybackQuality && e.target.setPlaybackQuality(best); }catch(_){}
-                }
-              }
-            }
-          });
-
-          // Comportamento do menu de qualidade
-          const qBtn = card.querySelector('[data-qbtn]');
-          const qMenu= card.querySelector('[data-qmenu]');
-          const qLabel=card.querySelector('[data-qlabel]');
-
-          qBtn?.addEventListener('click', (ev)=>{
-            ev.stopPropagation();
-            qMenu.style.display = (qMenu.style.display==='block' ? 'none' : 'block');
-          });
-
-          qMenu?.querySelectorAll('.q-item').forEach(item=>{
-            item.addEventListener('click', ()=>{
-              const q=item.getAttribute('data-q');
-              saveQ(id,q);
-              qLabel.textContent=Q_LABEL[q]||q;
-              try{
-                player.setPlaybackQuality && player.setPlaybackQuality(q);
-                enforceQuality(player, q);
-              }catch(_){}
-              qMenu.style.display='none';
-            });
-          });
-
-          // Fechar quando clicar fora
-          document.addEventListener('click', (ev)=>{
-            if (!qMenu.contains(ev.target) && !qBtn.contains(ev.target)){
-              qMenu.style.display='none';
-            }
-          });
+            playerVars:{ autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1 },
+            events:{ onReady:e=>onPlayerReady(e, id, i), onStateChange:e=>onPlayerStateChange(e, id, i) }
+          };
+          if(isPl){ playerConfig.playerVars.listType='playlist'; playerConfig.playerVars.list=id; }
+          else { playerConfig.videoId=id; }
+          players[i] = new YT.Player(`yt_${i}`, playerConfig);
         }
       });
     }
 
-    /* ===== Realtime ===== */
-    function saveRealtime(){
-      dbRef.set({ ids:VIDEO_IDS, labels:LABELS, locs:LOCS, cols:COLS, ts:Date.now() });
+    // ===== OFFLINE logic
+    const OFFLINE_POLL_MS = 10000; // 10s
+
+    function isProbablyLive(player){
+      try{
+        const data = player.getVideoData ? player.getVideoData() : null;
+        if(data && typeof data.isLive === 'boolean') return data.isLive; // quando disponível
+      }catch(_){}
+      try{
+        const dur = player.getDuration ? player.getDuration() : 0;
+        if(typeof dur === 'number' && dur === 0) return true; // live
+      }catch(_){}
+      return false;
     }
+
+    function setOffline(idx, flag){
+      const ov = document.getElementById(`off_${idx}`);
+      if(ov) ov.style.display = flag ? 'flex' : 'none';
+    }
+
+    function onPlayerReady(e, id, idx){
+      try{ e.target.mute(); e.target.playVideo(); }catch(_){}
+      const desired=getSavedQ(id) || DEFAULT_QUALITY;
+      const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
+      const best=pickAvailableQuality(desired, avail);
+      try{ e.target.setPlaybackQuality && e.target.setPlaybackQuality(best); }catch(_){}
+      enforceQuality(e.target, best);
+      // LABEL qualidade
+      const card=qs(`#card_${idx}`);
+      const lbl=card?.querySelector('[data-qlabel]'); if(lbl) lbl.textContent=Q_LABEL[best]||best;
+      if(!getSavedQ(id)) saveQ(id, best);
+      // OFFLINE imediato
+      const live = isProbablyLive(e.target);
+      setOffline(idx, !live);
+      if(!live){ try{ e.target.pauseVideo && e.target.pauseVideo(); }catch(_){} }
+    }
+
+    function onPlayerStateChange(e, id, idx){
+      if (e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING){
+        const desired=getSavedQ(id) || DEFAULT_QUALITY;
+        const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
+        const best=pickAvailableQuality(desired, avail);
+        try{ e.target.setPlaybackQuality && e.target.setPlaybackQuality(best); }catch(_){}
+      }
+    }
+
+    setInterval(()=>{
+      Object.keys(players).forEach(k=>{
+        const i = Number(k);
+        const p = players[i];
+        if(!p) return;
+        const live = isProbablyLive(p);
+        setOffline(i, !live);
+        if(!live){ try{ p.pauseVideo && p.pauseVideo(); }catch(_){} }
+      });
+    }, OFFLINE_POLL_MS);
+
+    /* ===== Realtime ===== */
+    function saveRealtime(){ dbRef.set({ ids:VIDEO_IDS, labels:LABELS, locs:LOCS, cols:COLS, ts:Date.now() }); }
     function subscribeRealtime(){
       dbRef.on('value', snap=>{
         const j=snap.val(); if(!j) return;
         const newIds=j.ids||[], newLabels=j.labels||[], newLocs=j.locs||[];
         COLS = parseInt(j.cols||COLS||2,10);
 
-        const sameSet = newIds.length===VIDEO_IDS.length &&
-                        [...newIds].sort().join(',') === [...VIDEO_IDS].sort().join(',');
+        const sameSet = newIds.length===VIDEO_IDS.length && [...newIds].sort().join(',') === [...VIDEO_IDS].sort().join(',');
 
         if(sameSet && YT_READY){
-          // reordena DOM sem recriar players
           const grid=qs('#gridContainer');
-          newIds.forEach(id=>{
-            const el=document.getElementById(`card_${id}`);
+          newIds.forEach((_,idx)=>{
+            const el=qs(`#card_${idx}`);
             if(el) grid.appendChild(el);
           });
           VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
-
-          // atualiza textos
+          qsa('.video-card').forEach((card,idx)=>{ card.dataset.idx=String(idx); card.dataset.vid=VIDEO_IDS[idx]||''; });
           newIds.forEach((id,idx)=>{
-            const card=document.getElementById(`card_${id}`);
+            const card=qs(`#card_${idx}`);
             if(card){
               const title=card.querySelector('h3'); const loc=card.querySelector('p.text-gray-400');
               if(title) title.textContent=newLabels[idx]||`Equipe ${idx+1}`;
               if(loc)   loc.textContent=newLocs[idx]||'';
             }
           });
-
-          // aplica colunas (respeitando override do viewer)
           applyGridCols();
         } else {
           VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
@@ -343,78 +398,52 @@
 
     /* ===== UI Init ===== */
     document.addEventListener('DOMContentLoaded', ()=>{
-      // Mostrar/ocultar botões conforme modo
       qs('#btnShare')?.classList.toggle('hidden', isView);
       qs('#btnConfig')?.classList.toggle('hidden', isView);
       qs('#btnClearAll')?.classList.toggle('hidden', isView);
 
-      // login só no editor
       if(!isView){
         if(auth_ok_until()<=Date.now()){
           qs('#authOverlay').style.display='flex';
           qs('#authForm')?.addEventListener('submit', e=>{ e.preventDefault(); doLogin(); });
         }
-      } else {
-        qs('#authOverlay').style.display='none';
-      }
+      } else { qs('#authOverlay').style.display='none'; }
 
-      // Cabeçalho
       qs('#btnFullscreen')?.addEventListener('click',()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); });
 
-      // Layout select:
       qs('#layout')?.addEventListener('change', ()=>{
         const val = parseInt(qs('#layout').value,10)||2;
-        if(isView){
-          // apenas local (override), sem salvar no Firebase
-          VIEW_COLS_OVERRIDE = val;
-          applyGridCols();
-        } else {
-          // editor: salva no Firebase
-          COLS = val;
-          saveRealtime();
-          applyGridCols();
-        }
+        if(isView){ VIEW_COLS_OVERRIDE = val; applyGridCols(); }
+        else { COLS = val; saveRealtime(); applyGridCols(); }
       });
 
-      // Inserir equipe (editor)
       qs('#btnAddTeam')?.addEventListener('click', e=>{
         e.preventDefault();
         const name=qs('#teamName').value.trim();
         const loc=qs('#teamLocation').value.trim();
         const url=qs('#youtubeUrl').value.trim();
         if(!name||!url){ alert('Preencha Nome e URL'); return; }
-        const id=idFromUrl(url); // agora extrai PLAYLIST ID
+        const id=idFromUrl(url);
         VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc);
-        // Qualidade padrão (144p) para a nova PLAYLIST
         if(!getSavedQ(id)) saveQ(id, DEFAULT_QUALITY);
-        saveRealtime();
-        renderGrid();
+        saveRealtime(); renderGrid();
         qs('#configModal').classList.add('hidden'); qs('#teamForm').reset();
       });
 
-      // Share link (editor)
       qs('#btnShare')?.addEventListener('click', ()=>{
-        const base=location.origin+location.pathname;
-        const url=new URL(base);
-        url.searchParams.set('mode','view');
-        url.searchParams.set('cols', String(COLS));
-        url.searchParams.set('sync','rt');
+        const base=location.origin+location.pathname; const url=new URL(base);
+        url.searchParams.set('mode','view'); url.searchParams.set('cols', String(COLS)); url.searchParams.set('sync','rt');
         navigator.clipboard.writeText(url.toString()).then(()=>alert('Link do VISUALIZADOR copiado:\n\n'+url.toString()));
       });
 
-      // Limpar tudo (editor)
       qs('#btnClearAll')?.addEventListener('click', ()=>{
         if(!confirm('Apagar TODAS as equipes do dashboard?')) return;
-        VIDEO_IDS=[]; LABELS=[]; LOCS=[];
-        saveRealtime();
-        renderGrid();
+        VIDEO_IDS=[]; LABELS=[]; LOCS=[]; saveRealtime(); renderGrid();
       });
 
-      // Start RT e primeira render
       subscribeRealtime();
     });
 
-    // (mantemos UMA definição – antes havia duas)
     window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
   })();
   </script>
@@ -490,8 +519,8 @@
             <input id="teamLocation" type="text" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="Rua / Bairro / Ponto de referência">
           </div>
           <div>
-            <label class="block text-sm mb-1">URL da Playlist do YouTube</label>
-            <input id="youtubeUrl" type="url" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="https://www.youtube.com/playlist?list=PLxxxxxxx">
+            <label class="block text-sm mb-1">URL da Playlist/Vídeo</label>
+            <input id="youtubeUrl" type="url" required class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="https://www.youtube.com/playlist?list=PLxxxxxxx ou https://www.youtube.com/watch?v=abc123">
           </div>
           <div class="flex gap-3 pt-2">
             <button id="btnAddTeam" class="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded">Adicionar</button>

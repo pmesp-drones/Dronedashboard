@@ -4,36 +4,52 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Programa de Policiamento com Drones</title>
-  <!-- build: v11-offline+playlist+btnfix2 -->
+  <!-- build: v12 - playlist + OFFLINE + qualidade + remover fix -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { --card:#111827; }
-    body { background:#111827; color:white; box-sizing:border-box; }
+    * { box-sizing: border-box; }
+    body { background:#111827; color:white; }
+
     .grid-container { display:grid; gap:1rem; grid-template-columns:repeat(2,1fr); }
     @media (max-width:1024px){ .grid-container{ grid-template-columns:repeat(2,1fr);} }
     @media (max-width:640px){  .grid-container{ grid-template-columns:1fr;} }
+
     .video-card{ background:#1f2937; border-radius:12px; overflow:hidden; border:1px solid #374151; }
     .video-box{ aspect-ratio:16/9; position:relative; cursor:move; }
     .player-fill{ position:absolute; inset:0; }
     .player-fill iframe{ width:100%!important; height:100%!important; display:block; }
+
     .badge-live{ background:#dc2626; }
     .tile-btn{ font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.15); border-radius:8px; }
     .tile-btn:hover{ background:rgba(255,255,255,.08); }
     .drag-over{ outline:2px dashed #60a5fa; outline-offset:-6px; }
     .hidden { display:none!important; }
 
-    /* OFFLINE overlay */
-    .offline-overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:1rem; background:linear-gradient(180deg, rgba(17,24,39,0.2), rgba(17,24,39,0.85)); backdrop-filter: blur(2px); }
-    .offline-badge{ display:inline-flex; align-items:center; gap:.5rem; padding:.5rem .75rem; border:1px solid rgba(255,255,255,.2); border-radius:.5rem; font-size:.85rem; color:#e5e7eb; }
+    /* OFFLINE overlay: não bloqueia clique, fica abaixo dos botões */
+    .offline-overlay{
+      position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+      text-align:center; padding:1rem;
+      background:linear-gradient(180deg, rgba(17,24,39,0.25), rgba(17,24,39,0.85));
+      backdrop-filter:blur(2px);
+      pointer-events:none; z-index:9;
+    }
+    .offline-badge{
+      display:inline-flex; align-items:center; gap:.5rem; padding:.5rem .75rem;
+      border:1px solid rgba(255,255,255,.25); border-radius:.5rem; font-size:.9rem; color:#e5e7eb;
+    }
 
     /* ===== QUALIDADE (ícone + menu) ===== */
-    .q-wrap{ position:absolute; right:.5rem; bottom:.5rem; display:flex; align-items:center; gap:.4rem; }
+    .q-wrap{ position:absolute; right:.5rem; bottom:.5rem; display:flex; align-items:center; gap:.4rem; z-index:12; }
     .q-btn{ display:flex; align-items:center; gap:.35rem; font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.15); border-radius:8px; background:rgba(0,0,0,.45); backdrop-filter:blur(2px); cursor:pointer; }
     .q-btn:hover{ background:rgba(255,255,255,.08); }
     .q-menu{ position:absolute; right:0; bottom:2.2rem; background:#0b1220; border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:.35rem; display:none; z-index:20; min-width:96px; }
     .q-item{ display:flex; align-items:center; gap:.45rem; padding:.35rem .5rem; border-radius:.45rem; font-size:12px; cursor:pointer; white-space:nowrap; }
     .q-item:hover{ background:rgba(255,255,255,.08); }
     .q-dot{ width:8px; height:8px; border-radius:999px; background:#60a5fa; opacity:.9; }
+
+    /* Botões de canto (tela cheia / remover) acima do overlay */
+    .controls { z-index:15; }
   </style>
 
   <!-- YouTube API -->
@@ -60,7 +76,7 @@
       err?.classList.remove('hidden'); setTimeout(()=>err?.classList.add('hidden'),1500); return false;
     }
 
-    /* ===== Firebase: SUA CONFIG ===== */
+    /* ===== Firebase ===== */
     const FIREBASE = {
       apiKey: "AIzaSyDadspZB30sQOgZr7PTcSbub1ZJB80Kui4",
       authDomain: "dashboarddronepmesp.firebaseapp.com",
@@ -82,16 +98,16 @@
     const MODE=(params.get('mode')||'edit').toLowerCase();
     const isView = MODE==='view';
     let COLS=parseInt(params.get('cols')||'2',10);
-    let VIEW_COLS_OVERRIDE=null; // seleção local do visualizador
+    let VIEW_COLS_OVERRIDE=null;
 
-    // Agora 'VIDEO_IDS' pode ser playlistId OU videoId
+    // ids aceita playlistId ou videoId (para teste)
     let VIDEO_IDS=[], LABELS=[], LOCS=[];
     let YT_READY=false;
 
-    // Mapa player por índice atual
+    // Players por índice
     const players = {};
 
-    /* ===== Qualidade (padrão 144p e persistência por playlist/vídeo) ===== */
+    /* ===== Qualidade ===== */
     const DEFAULT_QUALITY='tiny'; // 144p
     const Q_KEY_PREFIX='liveQ_';
     const Q_ORDER=['tiny','small','medium','large','hd720','hd1080','highres'];
@@ -104,7 +120,9 @@
       const avail=new Set(available||[]);
       if (avail.has(requested)) return requested;
       const idx=Q_ORDER.indexOf(requested);
-      if (idx>=0){ for(let i=idx;i>=0;i--) if (avail.has(Q_ORDER[i])) return Q_ORDER[i]; }
+      if (idx>=0){
+        for(let i=idx;i>=0;i--) if (avail.has(Q_ORDER[i])) return Q_ORDER[i];
+      }
       for(const q of Q_ORDER) if (avail.has(q)) return q;
       return requested;
     }
@@ -120,17 +138,16 @@
     }
 
     /* ===== Utils ===== */
-    const esc=s=>String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[m]));
-    // Extrai PLAYLIST ID (list=), videoId (v=) ou short
+    const esc=s=>String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
     const idFromUrl=u=>{
       try{
         const url=new URL(u);
         const list=url.searchParams.get('list');
         if(list) return list; // playlist
         const v=url.searchParams.get('v');
-        if(v) return v;       // video
+        if(v) return v;       // vídeo
         if(url.hostname.includes('youtu.be')) return url.pathname.slice(1);
-      }catch(_){ /* string solta */ }
+      }catch(_){}
       if(typeof u==='string'){
         if(u.includes('list=')) return u.split('list=')[1].split('&')[0];
         if(u.includes('watch?v=')) return u.split('v=')[1].split('&')[0];
@@ -144,9 +161,19 @@
     function attachDnD(cardEl){
       if(isView) return;
       cardEl.setAttribute('draggable','true');
-      cardEl.addEventListener('dragstart', e=>{ dragSrcIndex=parseInt(cardEl.dataset.idx,10); e.dataTransfer.effectAllowed='move'; cardEl.classList.add('opacity-80'); });
-      cardEl.addEventListener('dragend',   ()=>{ dragSrcIndex=null; cardEl.classList.remove('opacity-80'); qsa('.drag-over').forEach(x=>x.classList.remove('drag-over')); });
-      cardEl.addEventListener('dragover',  e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; cardEl.classList.add('drag-over'); });
+      cardEl.addEventListener('dragstart', e=>{
+        dragSrcIndex=parseInt(cardEl.dataset.idx,10);
+        e.dataTransfer.effectAllowed='move';
+        cardEl.classList.add('opacity-80');
+      });
+      cardEl.addEventListener('dragend',   ()=>{
+        dragSrcIndex=null;
+        cardEl.classList.remove('opacity-80');
+        qsa('.drag-over').forEach(x=>x.classList.remove('drag-over'));
+      });
+      cardEl.addEventListener('dragover',  e=>{
+        e.preventDefault(); e.dataTransfer.dropEffect='move'; cardEl.classList.add('drag-over');
+      });
       cardEl.addEventListener('dragleave', ()=>{ cardEl.classList.remove('drag-over'); });
       cardEl.addEventListener('drop',      e=>{
         e.preventDefault(); cardEl.classList.remove('drag-over');
@@ -168,8 +195,7 @@
       const cols = (isView && VIEW_COLS_OVERRIDE!=null) ? VIEW_COLS_OVERRIDE : COLS;
       const grid=qs('#gridContainer');
       if(grid) grid.style.gridTemplateColumns=`repeat(${cols}, 1fr)`;
-      const layout=qs('#layout');
-      if(layout) layout.value=String(cols);
+      const layout=qs('#layout'); if(layout) layout.value=String(cols);
     }
 
     function qualityControlTemplate(currentLabel){
@@ -194,21 +220,24 @@
       `;
     }
 
-    // Delegação global para botões de card (remove, fullscreen, qualidade)
+    // Delegação global p/ botões dos cards (remove/qualidade)
     document.addEventListener('click', (ev)=>{
+      // remover (só no editor)
       const rmBtn = ev.target.closest('[data-remove]');
-      if(rmBtn){
+      if(rmBtn && !isView){
         const card = ev.target.closest('.video-card');
         if(!card) return;
         const id = card.getAttribute('data-vid');
         const idx = VIDEO_IDS.indexOf(id);
-        if(idx>-1 && !isView){
+        if(idx>-1){
           if(!confirm('Remover esta equipe?')) return;
           VIDEO_IDS.splice(idx,1); LABELS.splice(idx,1); LOCS.splice(idx,1);
           saveRealtime(); renderGrid();
         }
         return;
       }
+
+      // abrir/fechar menu de qualidade
       const qBtn = ev.target.closest('[data-qbtn]');
       if(qBtn){
         const menu = qBtn.parentElement.querySelector('[data-qmenu]');
@@ -218,6 +247,8 @@
         ev.stopPropagation();
         return;
       }
+
+      // escolher qualidade
       const qItem = ev.target.closest('.q-item');
       if(qItem){
         const card = ev.target.closest('.video-card');
@@ -227,12 +258,13 @@
         const q  = qItem.getAttribute('data-q');
         saveQ(id,q);
         const player = players[idx];
-        try{ player && player.setPlaybackQuality && player.setPlaybackQuality(q); enforceQuality(player,q); }catch(_){}
+        try{ player && player.setPlaybackQuality && player.setPlaybackQuality(q); enforceQuality(player,q); }catch(_) {}
         const lbl = card.querySelector('[data-qlabel]'); if(lbl) lbl.textContent = Q_LABEL[q]||q;
         const menu = card.querySelector('[data-qmenu]'); if(menu) menu.style.display='none';
         return;
       }
-      // Fechar menus de qualidade ao clicar fora
+
+      // clique fora fecha menus
       const clickedInsideQ = ev.target.closest('.q-wrap');
       if(!clickedInsideQ){ qsa('.q-menu').forEach(m=> m.style.display='none'); }
     });
@@ -259,7 +291,7 @@
         card.className='video-card';
         card.dataset.idx=String(i);
         card.dataset.vid=id;
-        card.id=`card_${i}`; // índice para garantir unicidade
+        card.id=`card_${i}`;
 
         card.innerHTML=
           `<div class="video-box">
@@ -269,7 +301,7 @@
                <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span> AO VIVO
              </div>
 
-             <div class="absolute top-2 right-2 flex gap-2">
+             <div class="absolute top-2 right-2 flex gap-2 controls">
                <button class="tile-btn" onclick="window.open('${fullUrl}','_blank')">Tela cheia</button>
                ${isView ? '' : `<button class="tile-btn" data-remove>Remover</button>`}
              </div>
@@ -305,24 +337,16 @@
       });
     }
 
-    // ===== OFFLINE logic
+    /* ===== OFFLINE (baseado no estado do player) ===== */
     const OFFLINE_POLL_MS = 10000; // 10s
-
-    function isProbablyLive(player){
-      try{
-        const data = player.getVideoData ? player.getVideoData() : null;
-        if(data && typeof data.isLive === 'boolean') return data.isLive; // quando disponível
-      }catch(_){}
-      try{
-        const dur = player.getDuration ? player.getDuration() : 0;
-        if(typeof dur === 'number' && dur === 0) return true; // live
-      }catch(_){}
-      return false;
-    }
 
     function setOffline(idx, flag){
       const ov = document.getElementById(`off_${idx}`);
       if(ov) ov.style.display = flag ? 'flex' : 'none';
+    }
+    function updateOnlineState(idx, state){
+      const online = (state===YT.PlayerState.PLAYING || state===YT.PlayerState.BUFFERING);
+      setOffline(idx, !online);
     }
 
     function onPlayerReady(e, id, idx){
@@ -332,17 +356,18 @@
       const best=pickAvailableQuality(desired, avail);
       try{ e.target.setPlaybackQuality && e.target.setPlaybackQuality(best); }catch(_){}
       enforceQuality(e.target, best);
-      // LABEL qualidade
+
+      // atualiza label engrenagem
       const card=qs(`#card_${idx}`);
       const lbl=card?.querySelector('[data-qlabel]'); if(lbl) lbl.textContent=Q_LABEL[best]||best;
       if(!getSavedQ(id)) saveQ(id, best);
-      // OFFLINE imediato
-      const live = isProbablyLive(e.target);
-      setOffline(idx, !live);
-      if(!live){ try{ e.target.pauseVideo && e.target.pauseVideo(); }catch(_){} }
+
+      // começa como OFFLINE até tocar
+      setOffline(idx, true);
     }
 
     function onPlayerStateChange(e, id, idx){
+      if (typeof YT!=='undefined' && YT.PlayerState) updateOnlineState(idx, e.data);
       if (e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING){
         const desired=getSavedQ(id) || DEFAULT_QUALITY;
         const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
@@ -351,14 +376,16 @@
       }
     }
 
+    // Poll adicional para sincronizar overlay com estado atual
     setInterval(()=>{
       Object.keys(players).forEach(k=>{
         const i = Number(k);
         const p = players[i];
-        if(!p) return;
-        const live = isProbablyLive(p);
-        setOffline(i, !live);
-        if(!live){ try{ p.pauseVideo && p.pauseVideo(); }catch(_){} }
+        if(!p || typeof YT==='undefined' || !YT.PlayerState) return;
+        try{
+          const st = p.getPlayerState ? p.getPlayerState() : null;
+          if(st!=null){ updateOnlineState(i, st); }
+        }catch(_){}
       });
     }, OFFLINE_POLL_MS);
 
@@ -370,53 +397,48 @@
         const newIds=j.ids||[], newLabels=j.labels||[], newLocs=j.locs||[];
         COLS = parseInt(j.cols||COLS||2,10);
 
-        const sameSet = newIds.length===VIDEO_IDS.length && [...newIds].sort().join(',') === [...VIDEO_IDS].sort().join(',');
-
-        if(sameSet && YT_READY){
-          const grid=qs('#gridContainer');
-          newIds.forEach((_,idx)=>{
-            const el=qs(`#card_${idx}`);
-            if(el) grid.appendChild(el);
-          });
-          VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
-          qsa('.video-card').forEach((card,idx)=>{ card.dataset.idx=String(idx); card.dataset.vid=VIDEO_IDS[idx]||''; });
-          newIds.forEach((id,idx)=>{
-            const card=qs(`#card_${idx}`);
-            if(card){
-              const title=card.querySelector('h3'); const loc=card.querySelector('p.text-gray-400');
-              if(title) title.textContent=newLabels[idx]||`Equipe ${idx+1}`;
-              if(loc)   loc.textContent=newLocs[idx]||'';
-            }
-          });
-          applyGridCols();
-        } else {
-          VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
-          renderGrid();
-        }
+        // Para estabilidade dos botões/menus, preferimos re-render completo
+        const changed = JSON.stringify([VIDEO_IDS,LABELS,LOCS]) !== JSON.stringify([newIds,newLabels,newLocs]);
+        VIDEO_IDS=newIds.slice(); LABELS=newLabels.slice(); LOCS=newLocs.slice();
+        if (changed || !YT_READY) renderGrid();
+        else applyGridCols();
       });
     }
 
     /* ===== UI Init ===== */
     document.addEventListener('DOMContentLoaded', ()=>{
+      // Mostrar/ocultar botões conforme modo
       qs('#btnShare')?.classList.toggle('hidden', isView);
       qs('#btnConfig')?.classList.toggle('hidden', isView);
       qs('#btnClearAll')?.classList.toggle('hidden', isView);
 
+      // login só no editor
       if(!isView){
         if(auth_ok_until()<=Date.now()){
           qs('#authOverlay').style.display='flex';
           qs('#authForm')?.addEventListener('submit', e=>{ e.preventDefault(); doLogin(); });
         }
-      } else { qs('#authOverlay').style.display='none'; }
+      } else {
+        qs('#authOverlay').style.display='none';
+      }
 
+      // Cabeçalho
       qs('#btnFullscreen')?.addEventListener('click',()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); });
 
+      // Layout select:
       qs('#layout')?.addEventListener('change', ()=>{
         const val = parseInt(qs('#layout').value,10)||2;
-        if(isView){ VIEW_COLS_OVERRIDE = val; applyGridCols(); }
-        else { COLS = val; saveRealtime(); applyGridCols(); }
+        if(isView){
+          VIEW_COLS_OVERRIDE = val;
+          applyGridCols();
+        } else {
+          COLS = val;
+          saveRealtime();
+          applyGridCols();
+        }
       });
 
+      // Inserir equipe (editor)
       qs('#btnAddTeam')?.addEventListener('click', e=>{
         e.preventDefault();
         const name=qs('#teamName').value.trim();
@@ -426,24 +448,34 @@
         const id=idFromUrl(url);
         VIDEO_IDS.push(id); LABELS.push(name); LOCS.push(loc);
         if(!getSavedQ(id)) saveQ(id, DEFAULT_QUALITY);
-        saveRealtime(); renderGrid();
+        saveRealtime();
+        renderGrid();
         qs('#configModal').classList.add('hidden'); qs('#teamForm').reset();
       });
 
+      // Share link (editor)
       qs('#btnShare')?.addEventListener('click', ()=>{
-        const base=location.origin+location.pathname; const url=new URL(base);
-        url.searchParams.set('mode','view'); url.searchParams.set('cols', String(COLS)); url.searchParams.set('sync','rt');
+        const base=location.origin+location.pathname;
+        const url=new URL(base);
+        url.searchParams.set('mode','view');
+        url.searchParams.set('cols', String(COLS));
+        url.searchParams.set('sync','rt');
         navigator.clipboard.writeText(url.toString()).then(()=>alert('Link do VISUALIZADOR copiado:\n\n'+url.toString()));
       });
 
+      // Limpar tudo (editor)
       qs('#btnClearAll')?.addEventListener('click', ()=>{
         if(!confirm('Apagar TODAS as equipes do dashboard?')) return;
-        VIDEO_IDS=[]; LABELS=[]; LOCS=[]; saveRealtime(); renderGrid();
+        VIDEO_IDS=[]; LABELS=[]; LOCS=[];
+        saveRealtime();
+        renderGrid();
       });
 
+      // Start RT e primeira render
       subscribeRealtime();
     });
 
+    // Garantir uma única definição global
     window.onYouTubeIframeAPIReady=function(){ YT_READY=true; renderGrid(); };
   })();
   </script>

@@ -328,80 +328,83 @@
       }
     }
 
-    /* ===== Players lifecycle ===== */
-    function createGridPlayer(i, id, isPl, after){
-      if(LOW_BW_MODE) return; // em modo baixa largura, não cria
-      if(activeGrid.size >= MAX_CONCURRENT_GRID){ evictIfNeeded(); if(activeGrid.size >= MAX_CONCURRENT_GRID) return; }
+ /* ===== Players lifecycle ===== */
+function createGridPlayer(i, id, isPl, after){
+  if(LOW_BW_MODE) return; // em modo baixa largura, não cria
+  if(activeGrid.size >= MAX_CONCURRENT_GRID){ evictIfNeeded(); if(activeGrid.size >= MAX_CONCURRENT_GRID) return; }
 
-      const mountId = `yt_${i}`;
-      const savedQ = getSavedQ(id) || DEFAULT_QUALITY;
-      const cfg = {
-        width:'100%', height:'100%',
-        playerVars:{ autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1 },
-        events:{
-          onReady:e=>{
-            try{ e.target.mute(); e.target.playVideo(); }catch(_){}
-            const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
-            let best=pickAvailableQuality(savedQ, avail);
-            try{ e.target.setPlaybackQuality && e.target.setPlaybackQuality(best); }catch(_){}
-            enforceQuality(e.target, best);
-            const card=qs(`#card_${i}`);
-            const lbl=card?.querySelector('[data-qlabel]'); if(lbl) lbl.textContent=Q_LABEL[best]||best;
-            if(!getSavedQ(id)) saveQ(id, best);
+  const mountId = `yt_${i}`;
+  const savedQ = getSavedQ(id) || DEFAULT_QUALITY;
+  const cfg = {
+    width:'100%', height:'100%',
+    playerVars:{ autoplay:1, mute:1, playsinline:1, controls:0, rel:0, modestbranding:1 },
+    events:{
+      onReady:e=>{
+        try{
+          // --- BLOQUEIA REPLAY: só toca se estiver realmente ao vivo ---
+          const info = e.target.getVideoData ? e.target.getVideoData() : {};
+          const dur  = typeof e.target.getDuration === 'function' ? e.target.getDuration() : null;
+          const isLive = (info && info.isLiveContent) || dur === 0;
+
+          if(!isLive){
+            // Não está ao vivo: mostra OFFLINE, volta thumbnail e libera recursos
             setOfflineEl(`off_${i}`, true);
-            // marca como ativo
-            activeGrid.add(i); touchLRU(i);
-            // lazy atributo loading
-            const iframe = qs(`#${mountId} iframe`); if(iframe){ iframe.setAttribute('loading','lazy'); }
-            after && after();
-          },
-          onStateChange:e=>{
-            if (typeof YT!=='undefined' && YT.PlayerState){
-              const online = (e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING);
-              setOfflineEl(`off_${i}`, !online);
-              // se estiver BUFFERING muito, reduza qualidade
-              if(e.data===YT.PlayerState.BUFFERING){
-                try{
-                  const cur = getSavedQ(id) || DEFAULT_QUALITY;
-                  const idx = Q_ORDER.indexOf(cur);
-                  if(idx>0){ // desce um degrau
-                    const down = Q_ORDER[idx-1];
-                    saveQ(id, down);
-                    players[i]?.setPlaybackQuality?.(down);
-                    enforceQuality(players[i], down, 6, 800);
-                    const card=qs(`#card_${i}`);
-                    const lbl=card?.querySelector('[data-qlabel]'); if(lbl) lbl.textContent=Q_LABEL[down]||down;
-                  }
-                }catch(_){}
+            destroyGridPlayer(i);
+            return;
+          }
+          // ---------------------------------------------------------------
+
+          e.target.mute();
+          e.target.playVideo();
+
+          const avail=e.target.getAvailableQualityLevels?e.target.getAvailableQualityLevels():[];
+          let best=pickAvailableQuality(savedQ, avail);
+          e.target.setPlaybackQuality?.(best);
+          enforceQuality(e.target, best);
+
+          const card=qs(`#card_${i}`);
+          const lbl=card?.querySelector('[data-qlabel]'); if(lbl) lbl.textContent=Q_LABEL[best]||best;
+          if(!getSavedQ(id)) saveQ(id, best);
+          setOfflineEl(`off_${i}`, false);
+
+          // marca como ativo
+          activeGrid.add(i); touchLRU(i);
+
+          // lazy no iframe
+          const iframe = qs(`#${mountId} iframe`); if(iframe){ iframe.setAttribute('loading','lazy'); }
+
+          after && after();
+        }catch(_){}
+      },
+      onStateChange:e=>{
+        if (typeof YT!=='undefined' && YT.PlayerState){
+          const online = (e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING);
+          setOfflineEl(`off_${i}`, !online);
+          // auto-downgrade de qualidade em buffering
+          if(e.data===YT.PlayerState.BUFFERING){
+            try{
+              const cur = getSavedQ(id) || DEFAULT_QUALITY;
+              const idx = Q_ORDER.indexOf(cur);
+              if(idx>0){
+                const down = Q_ORDER[idx-1];
+                saveQ(id, down);
+                players[i]?.setPlaybackQuality?.(down);
+                enforceQuality(players[i], down, 6, 800);
+                const card=qs(`#card_${i}`);
+                const lbl=card?.querySelector('[data-qlabel]'); if(lbl) lbl.textContent=Q_LABEL[down]||down;
               }
-            }
-            touchLRU(i);
+            }catch(_){}
           }
         }
-      };
-      if(isPl){ cfg.playerVars.listType='playlist'; cfg.playerVars.list=id; }
-      else { cfg.videoId=id; }
-
-      players[i] = new YT.Player(mountId, cfg);
+        touchLRU(i);
+      }
     }
+  };
+  if(isPl){ cfg.playerVars.listType='playlist'; cfg.playerVars.list=id; }
+  else { cfg.videoId=id; }
 
-    function destroyGridPlayer(i){
-      const p = players[i];
-      if(p && p.destroy){ try{ p.destroy(); }catch(_){ } }
-      players[i] = null;
-      activeGrid.delete(i);
-      // volta thumbnail visível
-      const card = qs(`#card_${i}`);
-      const thumb = card?.querySelector('[data-thumb]');
-      const fill  = card?.querySelector('.player-fill');
-      if(thumb) thumb.classList.remove('hidden');
-      if(fill)  fill.innerHTML = ''; // limpa mount
-    }
-
-    function setOfflineEl(elId, flag){
-      const ov = document.getElementById(elId);
-      if(ov) ov.style.display = flag ? 'flex' : 'none';
-    }
+  players[i] = new YT.Player(mountId, cfg);
+}
 
     /* ===== Main player ===== */
     function createMain(id){
